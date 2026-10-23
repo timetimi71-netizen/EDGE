@@ -341,6 +341,7 @@ export const DIMS = [
     order: (k) => ['bis 0,5 %', '0,5–1 %', '1–2 %', 'über 2 %'].indexOf(k),
   },
   { id: 'tf', name: 'Zeiteinheit', icon: 'clock', key: (t) => t.tf || null, order: (k) => ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'].indexOf(k) },
+  { id: 'check', name: 'Ampel', icon: 'shield', key: (t) => (t.check ? CHECK[t.check] : null), order: (k) => ['Grün', 'Gelb', 'Unvollständig', 'Rot'].indexOf(k) },
 ];
 export function groupBy(trades, dim) {
   const m = new Map();
@@ -372,7 +373,7 @@ export function insights(trades, cur) {
   const k = kpis(trades);
 
   // 1. Größter Verlustbringer und bester Bereich je Aufteilung
-  for (const dim of DIMS.filter((d) => !['mistakes', 'rules'].includes(d.id))) {
+  for (const dim of DIMS.filter((d) => !['mistakes', 'rules', 'check'].includes(d.id))) {
     const g = groupBy(trades, dim).filter((x) => x.n >= 3);
     if (g.length < 2) continue;
     const worst = g.reduce((a, b) => (b.net < a.net ? b : a));
@@ -404,6 +405,23 @@ export function insights(trades, cur) {
         dim: 'rules',
         title: 'Regeln brechen kostet',
         text: `Hältst du dich an deine Regeln, bringt ein Trade im Schnitt <b>${money(a)}</b>, brichst du sie, <b>${money(b)}</b>. Das waren ${broken.length} Trades.`,
+      });
+    }
+  }
+
+  // 2b. Trotz Ampel getradet
+  const red = trades.filter((t) => t.check === 'red');
+  const green = trades.filter((t) => t.check === 'green');
+  if (red.length >= 3) {
+    const nr = red.reduce((s, t) => s + t.pnl, 0);
+    const wrR = red.filter((t) => t.pnl > 0).length / red.length;
+    if (nr < 0) {
+      out.push({
+        tone: 'bad',
+        impact: -nr,
+        dim: 'check',
+        title: 'Trotz roter Ampel getradet',
+        text: `${red.length} Trades bei Rot, zusammen <b>${money(nr)}</b> und ${fmtNum(wrR * 100, 0)}&nbsp;% Treffer${green.length >= 3 ? `. Bei Grün triffst du ${fmtNum((green.filter((t) => t.pnl > 0).length / green.length) * 100, 0)}&nbsp;%` : ''}.`,
       });
     }
   }
@@ -493,3 +511,142 @@ export function insights(trades, cur) {
   return [...top.filter((x) => x.tone !== 'good').slice(0, 5), ...top.filter((x) => x.tone === 'good').slice(0, 3)];
 }
 export const wdShort = (ms) => WD[new Date(ms).getDay()];
+
+/* ---------- Vor dem Trade: die Ampel ----------
+   Rot: eine Grenze oder Regel ist verletzt. Offen: es fehlt noch etwas. Gelb: erlaubt, aber mit Warnzeichen. Grün: alles passt. */
+export const CHECK = { green: 'Grün', yellow: 'Gelb', red: 'Rot', open: 'Unvollständig' };
+const pctIn = (text, fallback) => {
+  const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(text || '');
+  return m ? +m[1].replace(',', '.') : fallback;
+};
+const rrIn = (text) => {
+  const m = /1\s*:\s*(\d+(?:[.,]\d+)?)/.exec(text || '');
+  if (m) return +m[1].replace(',', '.');
+  if (/drei(fach|mal)/i.test(text)) return 3;
+  return 2;
+};
+// Standard-Regeln, die Edge aus den Zahlen selbst beantworten kann: true, false oder null (noch nicht entscheidbar)
+export function autoRule(rule, x) {
+  if (rule.id === 'sl') return x.sl ? true : null;
+  if (rule.id === 'risk') return x.riskPct != null ? x.riskPct <= pctIn(rule.text, 1) + 0.005 : null;
+  if (rule.id === 'rr') return x.rr != null ? x.rr >= rrIn(rule.text) - 0.005 : null;
+  return null;
+}
+
+// Wie liefen frühere Trades, die zu diesem passen? (Symbol, Setup, Session, Uhrzeit, Wochentag, Richtung)
+function historyHints(x, now, cur) {
+  const pool = [...S.trades.values()].filter((t) => t.closeAt > now - 365 * 864e5 && t.closeAt <= now);
+  if (pool.length < 10) return [];
+  const wrAll = pool.filter((t) => t.pnl > 0).length / pool.length;
+  const plan = { ...x, openAt: now, closeAt: now };
+  const dims = [
+    ['symbol', (k) => k],
+    ['setup', (k) => `Das Setup ${k}`],
+    ['session', (k) => (k === 'Asien' ? 'Die Asien-Session' : `Die Session ${k}`)],
+    ['hour', (k) => `Die Zeit ${k}`],
+    ['weekday', (k) => `Der ${k}`],
+    ['side', (k) => `${k}-Trades`, true],
+  ];
+  const out = [];
+  for (const [id, label, plural] of dims) {
+    const dim = DIMS.find((d) => d.id === id);
+    const key = dim.key(plan);
+    if (key == null) continue;
+    const list = pool.filter((t) => dim.key(t) === key);
+    if (list.length < 5) continue;
+    const net = list.reduce((a, t) => a + t.pnl, 0);
+    const wr = list.filter((t) => t.pnl > 0).length / list.length;
+    const money = fmtMoney(net, cur, { sign: true });
+    if (net < 0 && wr < wrAll - 0.05) out.push({ lv: 'yellow', impact: -net, text: `${label(key)} ${plural ? 'liefen' : 'lief'} bei dir bisher schlecht: ${list.length} Trades, ${fmtNum(wr * 100, 0)}\u00a0% Treffer, zusammen ${money}.` });
+    else if (net > 0 && wr > wrAll + 0.08) out.push({ lv: 'good', impact: net, text: `${label(key)} ${plural ? 'laufen' : 'läuft'} bei dir: ${list.length} Trades, ${fmtNum(wr * 100, 0)}\u00a0% Treffer, zusammen ${money}.` });
+  }
+  out.sort((a, b) => b.impact - a.impact);
+  return [...out.filter((o) => o.lv === 'yellow').slice(0, 2), ...out.filter((o) => o.lv === 'good').slice(0, 1)];
+}
+
+/* x: { symbol, side, entry, sl, tp, riskPct, balance, setup, feel }, answers: Regel-id -> true/false (von Hand) */
+export function tradeCheck({ acc, x, answers = {}, now = Date.now(), open = [], plan = null }) {
+  const cur = acc.currency;
+  const m = (v) => fmtMoney(v, cur);
+  const st = accountState(acc, now);
+  const p = personal(st);
+  const lim = S.settings.limits || {};
+  const info = symInfo(x.symbol || 'EURUSD');
+  const reasons = [];
+  const add = (lv, text, ic) => reasons.push({ lv, text, ic });
+  const side = x.side === 'short' ? 'short' : 'long';
+  // Stop-Loss und Ziel auf der richtigen Seite?
+  const slWrong = x.entry && x.sl && (side === 'long' ? x.sl >= x.entry : x.sl <= x.entry);
+  const tpWrong = x.entry && x.tp && (side === 'long' ? x.tp <= x.entry : x.tp >= x.entry);
+  const res = x.entry && x.sl && !slWrong ? lotCalc({ balance: x.balance, riskPct: x.riskPct, symbol: x.symbol, entry: x.entry, sl: x.sl, accCur: cur }) : null;
+  const lots = res?.lots || null;
+  const risk = lots ? res.realRisk : null;
+  const riskPct = risk && x.balance ? (risk / x.balance) * 100 : null;
+  const rr = x.entry && x.sl && x.tp && !slWrong && !tpWrong ? Math.abs(x.tp - x.entry) / Math.abs(x.entry - x.sl) : null;
+  const openHere = open.filter((o) => o.accountId === acc.id);
+  const openToday = openHere.filter((o) => tradingDay(o.openAt, acc.resetHour) === st.today);
+  const openRisk = openHere.reduce((a, o) => a + (o.risk || 0), 0);
+
+  // Harte Grenzen
+  if (st.breach) add('red', `Ein Limit deiner Challenge ist schon verletzt (${st.breach.kind === 'daily' ? 'Tagesverlust' : 'Gesamtverlust'}).`, 'alert');
+  if (p.overLosses) add('red', `${p.lossStreak} Verluste in Folge. Deine Regel: für heute Schluss.`, 'pause');
+  const count = p.count + openToday.length;
+  if (p.maxTrades && count >= p.maxTrades) add('red', `Schon ${count} von ${p.maxTrades} Trades heute${openToday.length ? ', offene mitgezählt' : ''}. Deine Regel: für heute Schluss.`, 'pause');
+  const last = st.trades[st.trades.length - 1];
+  const cool = lim.cooldown ?? 30;
+  if (cool && last && last.pnl < 0 && now - last.closeAt < cool * 60e3) {
+    const ago = Math.max(0, Math.floor((now - last.closeAt) / 60e3));
+    add('red', ago < 1 ? `Dein letzter Trade war gerade eben ein Verlust. Noch ${cool} min Pause.` : `Dein letzter Trade war ein Verlust, vor ${ago} min. Noch ${cool - ago} min Pause.`, 'clock');
+  }
+  if (slWrong) add('red', `Der Stop-Loss liegt auf der falschen Seite für ${side === 'long' ? 'Long' : 'Short'}.`, 'alert');
+  if (tpWrong) add('yellow', `Das Ziel liegt auf der falschen Seite für ${side === 'long' ? 'Long' : 'Short'}.`, 'alert');
+  if (res && !lots) add('red', 'Unter 0,01 Lot: Der Stop ist für dieses Risiko zu weit weg.', 'alert');
+  if (risk && st.dailyLimit) {
+    const budget = st.dailyLeft - openRisk;
+    if (risk > budget + 0.005) add('red', budget > 0 ? `Bei Stop-Loss wäre dein Tageslimit gerissen. Heute sind noch ${m(budget)} drin${openRisk ? ' (offene Trades eingerechnet)' : ''}.` : 'Dein Spielraum für heute ist aufgebraucht.', 'shield');
+    else if (risk > budget * 0.5) add('yellow', `Ein Verlust nähme ${fmtNum((risk / budget) * 100, 0)}\u00a0% von dem, was du heute noch verlieren darfst.`, 'shield');
+  }
+  if (risk && st.maxAmt) {
+    const budget = st.maxLeft - openRisk;
+    if (risk > budget + 0.005) add('red', `Bei Stop-Loss wäre dein Gesamtlimit gerissen. Bis zur Grenze sind es noch ${m(Math.max(0, budget))}.`, 'shield');
+  }
+
+  // Deine Regeln
+  const rules = S.settings.rules.map((r) => {
+    const auto = autoRule(r, { sl: x.sl && !slWrong ? x.sl : null, riskPct, rr });
+    const val = auto ?? answers[r.id] ?? null;
+    return { id: r.id, text: r.text, auto: auto != null, val };
+  });
+  const broken = rules.filter((r) => r.val === false);
+  broken.forEach((r) => add('red', `Regel gebrochen: ${r.text}`, 'close'));
+  const missing = rules.filter((r) => r.val == null);
+
+  // Warnzeichen
+  const std = S.settings.risk || 1;
+  if (riskPct != null && riskPct > std + 0.05 && !broken.some((r) => r.id === 'risk')) add('yellow', `Mehr Risiko als dein Standard (${fmtNum(riskPct, 2)}\u00a0% statt ${fmtNum(std, std % 1 ? 2 : 0)}\u00a0%).`, 'target');
+  if (rr != null && rr < 1 && !rules.some((r) => r.id === 'rr')) add('yellow', `Das Ziel ist näher als der Stop (Chance-Risiko 1\u00a0:\u00a0${fmtNum(rr, 1)}).`, 'target');
+  if (x.feel && x.feel <= 2) {
+    const all = [...S.trades.values()].filter((t) => t.feelBefore);
+    const low = all.filter((t) => t.feelBefore <= 2);
+    const rest = all.filter((t) => t.feelBefore > 2);
+    const wr = (l) => l.filter((t) => t.pnl > 0).length / l.length;
+    add('yellow', low.length >= 4 && rest.length >= 4 ? `Du bist gerade ${x.feel === 1 ? 'gestresst' : 'unruhig'}. In diesem Zustand triffst du ${fmtNum(wr(low) * 100, 0)}\u00a0%, sonst ${fmtNum(wr(rest) * 100, 0)}\u00a0%.` : `Du bist gerade ${x.feel === 1 ? 'gestresst' : 'unruhig'}. So entstehen die meisten Fehltrades.`, 'brain');
+  }
+  const bias = plan?.bias?.[info.sym];
+  const hasPlan = plan && (plan.plan || plan.levels || Object.values(plan.bias || {}).some(Boolean));
+  if (bias === 'bull' || bias === 'bear') {
+    const want = bias === 'bull' ? 'long' : 'short';
+    if (want !== side) add('yellow', `Gegen deinen Plan: ${info.sym} hast du heute ${want === 'long' ? 'Long' : 'Short'} eingeplant.`, 'journal');
+    else add('good', `Passt zu deinem Marktplan (${info.sym} ${want === 'long' ? 'Long' : 'Short'}).`, 'journal');
+  } else if (!hasPlan) add('yellow', 'Für heute steht noch kein Marktplan im Journal.', 'journal');
+  if (plan?.news) add('info', `News laut deinem Plan: ${plan.news.slice(0, 90)}${plan.news.length > 90 ? '…' : ''}`, 'bell');
+  if (p.maxTrades && count === p.maxTrades - 1 && !reasons.some((r) => r.lv === 'red')) add('info', 'Das wäre dein letzter Trade für heute.', 'info');
+  if (openHere.length) add('info', `${openHere.length === 1 ? 'Ein Trade läuft' : `${openHere.length} Trades laufen`} noch, Risiko ${m(openRisk)}. Das ist oben eingerechnet.`, 'clock');
+  historyHints({ symbol: info.sym, side, setup: x.setup || null, feelBefore: x.feel || null }, now, cur).forEach((h) => add(h.lv, h.text, h.lv === 'good' ? 'up' : 'down'));
+
+  const needs = [];
+  if (!x.entry) needs.push('Einstieg');
+  if (!x.sl) needs.push('Stop-Loss');
+  const level = reasons.some((r) => r.lv === 'red') ? 'red' : needs.length || missing.length ? 'open' : reasons.some((r) => r.lv === 'yellow') ? 'yellow' : 'green';
+  return { level, reasons, rules, missing: missing.length, needs, lots, risk, riskPct, rr, res, info, count, openRisk, st };
+}

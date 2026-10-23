@@ -2,6 +2,7 @@
 import { S, activeAccount, accountTrades } from '../store.js';
 import { accountState, guard, personal, fmtMoney, fmtPct, tone, phaseName, insights, symInfo } from '../edge.js';
 import { tradeRow } from './trades.js';
+import { openCardHTML } from './check.js';
 import { icon, logoSVG } from '../ui.js';
 import { esc, today, fromISO, WD_LONG, MONTHS, fmtNum, IS_IOS, IS_STANDALONE, IS_PREVIEW } from '../util.js';
 import { act } from '../app.js';
@@ -97,13 +98,14 @@ function dashboard(acc) {
   </section>`
       : ''
   }
-  ${limitsCard(p)}
+  ${limitsCard(p, st)}
   <div class="qadd">
+    <button type="button" class="qbtn main" data-act="t-check">${icon('shield')}<span>Check</span></button>
     <button type="button" class="qbtn" data-act="t-new">${icon('plus')}<span>Trade</span></button>
     <button type="button" class="qbtn" data-act="t-import">${icon('camera')}<span>MT5</span></button>
-    <button type="button" class="qbtn" data-act="t-calc">${icon('calc')}<span>Lots</span></button>
     <button type="button" class="qbtn" data-act="go" data-to="journal">${icon('journal')}<span>Plan</span></button>
   </div>
+  ${openCardHTML(acc)}
   ${planCard(plan)}
   <section class="card">
     <div class="card-h"><h2 class="card-t">${icon('candles')} Heute</h2><span class="${tone(st.todayPnl)} small" style="font-weight:700">${todays.length ? m(st.todayPnl, { sign: true }) : ''}</span></div>
@@ -117,10 +119,15 @@ function dashboard(acc) {
   }`;
 }
 
-function limitsCard(p) {
-  if (!p.maxTrades && !p.stopAfter) return '';
+function limitsCard(p, st) {
+  // Pause nach einem Verlust: wie lange noch?
+  const cool = S.settings.limits?.cooldown ?? 30;
+  const last = st.trades[st.trades.length - 1];
+  const left = cool && last && last.pnl < 0 ? cool - Math.floor((Date.now() - last.closeAt) / 60e3) : 0;
+  if (!p.maxTrades && !p.stopAfter && left <= 0) return '';
   const stop = p.overLosses || (p.overTrades && p.count >= p.maxTrades);
   return `<section class="card limits ${stop ? 'stop' : ''}">
+    ${!stop && left > 0 ? `<div class="cool-msg">${icon('clock')}<span>Pause nach dem Verlust: noch <b>${left} min</b></span></div>` : ''}
     ${stop ? `<div class="stop-msg">${icon('pause')}<div><b>Für heute Schluss</b><span>${p.overLosses ? `${p.lossStreak} ${p.lossStreak === 1 ? 'Verlust' : 'Verluste in Folge'}. ` : ''}${p.overTrades ? `${p.count} von ${p.maxTrades} Trades gemacht. ` : ''}So steht es in deinen Regeln.</span></div></div>` : ''}
     <div class="lim-row">
       ${p.maxTrades ? `<div class="lim"><span>Trades heute</span><b>${p.count} / ${p.maxTrades}</b><div class="dots">${Array.from({ length: p.maxTrades }, (_, i) => `<i class="${i < p.count ? 'on' : ''}"></i>`).join('')}</div></div>` : ''}

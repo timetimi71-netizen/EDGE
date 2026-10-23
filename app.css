@@ -1603,6 +1603,64 @@ button.card { font: inherit; color: inherit; }
 .bias-seg button[data-v="bear"].on { color: var(--loss-t); }
 .kv b { white-space: nowrap; }
 
+
+/* ---------- Vor dem Trade: Ampel ---------- */
+/* Die Farbe kommt aus --c: am Punkt selbst (.adot.green) oder von der Ampel-Leiste drumherum */
+.adot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c, var(--text-3)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--text-3)) 22%, transparent); vertical-align: middle; flex: none; }
+.adot.green, .chk-bar.green { --c: var(--win); --ct: var(--win-t); }
+.adot.yellow, .chk-bar.yellow { --c: var(--warn); --ct: var(--warn-t); }
+.adot.red, .chk-bar.red { --c: var(--loss); --ct: var(--loss-t); }
+.chk-bar { --c: var(--text-3); --ct: var(--text-2); position: sticky; top: -1px; z-index: 3; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; background: color-mix(in srgb, var(--c) 13%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); box-shadow: 0 8px 24px -14px color-mix(in srgb, var(--c) 60%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: background-color .3s, border-color .3s; }
+.chk-bar .adot { width: 14px; height: 14px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent); }
+.chk-bar.red .adot, .chk-bar.green .adot { animation: adot-pulse 1.8s ease-in-out infinite; }
+@keyframes adot-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--c) 12%, transparent); } }
+.chk-v { display: grid; min-width: 0; flex: 1; }
+.chk-v b { font-size: 16px; color: var(--ct); }
+.chk-v span { font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chk-lots { display: grid; justify-items: end; line-height: 1; }
+.chk-lots b { font: 700 24px/1 var(--font-num); letter-spacing: -.02em; color: var(--text); }
+.chk-lots small { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+.ck-rules { display: grid; gap: 8px; }
+.ck-rule { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); transition: background-color .2s, border-color .2s; }
+.ck-rule.yes { background: color-mix(in srgb, var(--win) 9%, var(--surface-2)); border-color: color-mix(in srgb, var(--win) 30%, transparent); }
+.ck-rule.no { background: color-mix(in srgb, var(--loss) 9%, var(--surface-2)); border-color: color-mix(in srgb, var(--loss) 30%, transparent); }
+.ck-rt { flex: 1; min-width: 0; font-size: 14.5px; line-height: 1.35; }
+.ck-rt small { display: block; font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.ck-yn { display: flex; gap: 6px; flex: none; }
+.ck-yn button { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); color: var(--text-3); transition: background-color .2s, color .2s, transform .15s; }
+.ck-yn button:active { transform: scale(.92); }
+.ck-yn button .ic { width: 18px; height: 18px; stroke-width: 2.4; }
+.ck-yn button[data-yn="1"][aria-pressed="true"] { background: var(--win); border-color: var(--win); color: #fff; }
+.ck-yn button[data-yn="0"][aria-pressed="true"] { background: var(--loss); border-color: var(--loss); color: #fff; }
+.ck-rule.auto .ck-yn button { opacity: .55; }
+.ck-rule.auto .ck-yn button[aria-pressed="true"] { opacity: 1; }
+.ck-res { display: grid; gap: 2px; padding: 4px 14px; border-radius: 18px; background: var(--surface-2); border: 1px solid var(--line); }
+.ck-res .empty { padding: 12px 0; }
+.ck-why { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 0; }
+.ck-why + .ck-why { border-top: 1px solid var(--line); }
+.ck-why p { font-size: 14px; line-height: 1.42; color: var(--text); }
+.ck-ic { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--accent-2); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.ck-ic .ic { width: 16px; height: 16px; stroke-width: 2.2; }
+.ck-why.red .ck-ic { color: var(--loss-t); background: color-mix(in srgb, var(--loss) 14%, transparent); }
+.ck-why.yellow .ck-ic { color: var(--warn-t); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.ck-why.good .ck-ic { color: var(--win-t); background: color-mix(in srgb, var(--win) 14%, transparent); }
+.chk-actions { display: grid; gap: 8px; }
+.btn.danger-soft { color: var(--loss-t); background: color-mix(in srgb, var(--loss) 12%, var(--surface-2)); }
+.from-check { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; color: var(--text-2); }
+.from-check b { color: var(--text); }
+.qbtn.main { background: linear-gradient(150deg, var(--accent), var(--accent-2)); border-color: transparent; color: #fff; }
+.qbtn.main .ic { color: #fff; }
+.qbtn.main:active { background: var(--accent-2); }
+.open-card .orow { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.open-card .orow + .orow { border-top: 1px solid var(--line); }
+.open-card .tmain { flex: 1; min-width: 0; }
+.open-card .tsym .adot { margin-left: 4px; width: 8px; height: 8px; }
+.open-card .tsub { white-space: normal; }
+.oacts { display: flex; align-items: center; gap: 6px; flex: none; }
+.cool-msg { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--warn-t); margin-bottom: 10px; }
+.cool-msg .ic { width: 18px; height: 18px; }
+.cool-msg b { font-family: var(--font-num); }
+
 /* ---------- Ruhigere Bewegung ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .001ms !important; }

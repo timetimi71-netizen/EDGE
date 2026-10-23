@@ -9,7 +9,7 @@ import { stopDictation } from './speech.js';
 import { loadDemo } from './demo.js';
 import { openKeySheet } from './views/trades.js';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 const ACCENTS = [
   ['kobalt', '#3d6bff', 'Kobalt'],
@@ -237,6 +237,7 @@ function settingsHTML() {
     <div class="group">
       <div class="li"><span class="li-main"><span class="li-title">Höchstens Trades</span><span class="li-sub">0 = keine Grenze</span></span><div class="stepper"><button type="button" data-act="set-lim" data-k="maxTrades" data-d="-1" aria-label="Weniger">${icon('minus')}</button><output id="lim-maxTrades">${st.limits.maxTrades || 0}</output><button type="button" data-act="set-lim" data-k="maxTrades" data-d="1" aria-label="Mehr">${icon('plus')}</button></div></div>
       <div class="li"><span class="li-main"><span class="li-title">Stopp nach Verlusten in Folge</span><span class="li-sub">0 = keine Grenze</span></span><div class="stepper"><button type="button" data-act="set-lim" data-k="stopAfterLosses" data-d="-1" aria-label="Weniger">${icon('minus')}</button><output id="lim-stopAfterLosses">${st.limits.stopAfterLosses || 0}</output><button type="button" data-act="set-lim" data-k="stopAfterLosses" data-d="1" aria-label="Mehr">${icon('plus')}</button></div></div>
+      <div class="li"><span class="li-main"><span class="li-title">Pause nach einem Verlust</span><span class="li-sub">so lange zeigt der Check Rot</span></span><div class="stepper"><button type="button" data-act="set-cool" data-d="-15" aria-label="Kürzer">${icon('minus')}</button><output id="lim-cooldown">${coolText(st.limits.cooldown ?? 30)}</output><button type="button" data-act="set-cool" data-d="15" aria-label="Länger">${icon('plus')}</button></div></div>
       <label class="li" for="set-risk"><span class="li-title">Standard-Risiko pro Trade</span><span class="unit-in"><input class="num-in" id="set-risk" type="text" inputmode="decimal" value="${String(st.risk).replace('.', ',')}" data-input="set-risk"><small>%</small></span></label>
     </div>
 
@@ -366,6 +367,13 @@ act('set-lim', (el) => {
   const v = clamp((S.settings.limits[k] || 0) + Number(el.dataset.d), 0, 20);
   saveSettings({ limits: { ...S.settings.limits, [k]: v } });
   document.getElementById(`lim-${k}`).textContent = v;
+  haptic();
+});
+const coolText = (v) => (v ? `${v} min` : 'aus');
+act('set-cool', (el) => {
+  const v = clamp((S.settings.limits.cooldown ?? 30) + Number(el.dataset.d), 0, 120);
+  saveSettings({ limits: { ...S.settings.limits, cooldown: v } });
+  document.getElementById('lim-cooldown').textContent = coolText(v);
   haptic();
 });
 act('set-off', (el) => {

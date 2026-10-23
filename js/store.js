@@ -6,6 +6,7 @@ export const S = {
   trades: new Map(), // id -> Trade
   days: new Map(), // Datum -> Marktplan und Rückblick
   pics: new Set(), // ids der gespeicherten Bilder (Trade-id oder plan:Datum)
+  open: [], // geprüfte Trades, die noch laufen (Ergebnis fehlt noch)
   settings: null,
   memoryOnly: false,
 };
@@ -32,7 +33,7 @@ export const DEFAULTS = {
     { id: 'rr', text: 'Chance mindestens doppelt so groß wie das Risiko' },
     { id: 'news', text: 'Keine wichtigen News in den nächsten 30 Minuten' },
   ],
-  limits: { maxTrades: 3, stopAfterLosses: 2 },
+  limits: { maxTrades: 3, stopAfterLosses: 2, cooldown: 30 }, // cooldown: Minuten Pause nach einem Verlust
   geminiKey: '',
   geminiModel: '',
   pinHash: null,
@@ -156,6 +157,7 @@ export async function loadAll() {
     dy.forEach((d) => S.days.set(d.date, d));
     pk.forEach((k) => S.pics.add(k));
     S.settings = mergeSettings(meta.find((m) => m.key === 'settings')?.value);
+    S.open = (meta.find((m) => m.key === 'open')?.value || []).filter((o) => o?.id && o.accountId);
   } catch (e) {
     console.error(e);
     S.settings = mergeSettings();
@@ -193,6 +195,7 @@ export function saveAccount(a) {
 export async function deleteAccount(id) {
   const trades = [...S.trades.values()].filter((t) => t.accountId === id);
   for (const t of trades) await deleteTrade(t.id);
+  if (S.open.some((o) => o.accountId === id)) await writeOpen(S.open.filter((o) => o.accountId !== id));
   S.accounts.delete(id);
   await remove('accounts', id);
   if (S.settings.activeAccount === id) await saveSettings({ activeAccount: activeAccount()?.id || null });
@@ -224,6 +227,19 @@ export async function deleteTrade(id) {
   await remove('trades', id);
   if (S.pics.has(id)) await deletePic(id);
 }
+
+/* ---------- Offene Trades: vor dem Einstieg geprüft, Ergebnis kommt später ---------- */
+const writeOpen = (list) => {
+  S.open = list;
+  return put('meta', { key: 'open', value: list });
+};
+export function saveOpen(o) {
+  const e = { createdAt: Date.now(), ...o, id: o.id || uid() };
+  writeOpen([...S.open.filter((x) => x.id !== e.id), e]);
+  return e;
+}
+export const removeOpen = (id) => writeOpen(S.open.filter((x) => x.id !== id));
+export const openOf = (accountId) => S.open.filter((o) => o.accountId === accountId).sort((a, b) => a.openAt - b.openAt);
 
 /* ---------- Tage: Marktplan und Rückblick ---------- */
 // Was du selbst schreibst, ist kein Beispiel mehr und bleibt beim Entfernen der Beispieldaten erhalten
@@ -299,6 +315,7 @@ export async function wipeAll() {
   S.trades.clear();
   S.days.clear();
   S.pics.clear();
+  S.open = [];
   memPics.clear();
   urls.forEach((u) => URL.revokeObjectURL(u));
   urls.clear();
@@ -308,7 +325,7 @@ export async function wipeAll() {
 }
 export async function removeDemo() {
   // Eigene Trades in einem Beispielkonto: das Konto bleibt, damit nichts verloren geht
-  for (const t of S.trades.values()) {
+  for (const t of [...S.trades.values(), ...S.open]) {
     const a = S.accounts.get(t.accountId);
     if (!t.demo && a?.demo) {
       const { demo, ...keep } = a;
@@ -329,10 +346,11 @@ export async function removeDemo() {
     }
   }
   reindex();
+  if (S.open.some((o) => o.demo)) await writeOpen(S.open.filter((o) => !o.demo));
   const a = activeAccount();
   await saveSettings({ demoLoaded: false, activeAccount: a?.id || null });
 }
-export const hasDemo = () => [S.accounts, S.trades, S.days].some((m) => [...m.values()].some((e) => e.demo));
+export const hasDemo = () => [S.accounts, S.trades, S.days].some((m) => [...m.values()].some((e) => e.demo)) || S.open.some((o) => o.demo);
 
 /* ---------- Backup ---------- */
 export async function buildBackup() {
@@ -353,6 +371,7 @@ export async function buildBackup() {
     accounts: [...S.accounts.values()],
     trades: [...S.trades.values()],
     days: [...S.days.values()],
+    open: S.open,
     pics,
   };
 }
@@ -365,6 +384,7 @@ export async function restoreBackup(data) {
   const accounts = (data.accounts || []).filter((a) => a && isId(a.id) && Number.isFinite(a.size));
   const trades = (data.trades || []).filter((t) => t && isId(t.id) && isId(t.accountId) && Number.isFinite(t.pnl) && Number.isFinite(t.closeAt) && isDate(t.day));
   const days = (data.days || []).filter((d) => d && isDate(d.date));
+  const open = (data.open || []).filter((o) => o && isId(o.id) && isId(o.accountId) && Number.isFinite(o.openAt));
   accounts.forEach((a) => S.accounts.set(a.id, a));
   trades.forEach((t) => S.trades.set(t.id, t));
   days.forEach((d) => S.days.set(d.date, d));
@@ -372,6 +392,7 @@ export async function restoreBackup(data) {
   await putMany('accounts', accounts);
   await putMany('trades', trades);
   await putMany('days', days);
+  if (open.length) await writeOpen([...S.open.filter((o) => !open.some((n) => n.id === o.id)), ...open]);
   let pics = 0;
   for (const p of data.pics || []) {
     if (!isId(p?.id) || !p.data) continue;

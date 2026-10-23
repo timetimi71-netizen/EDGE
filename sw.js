@@ -1,5 +1,5 @@
 // Edge · Service Worker: hält die App offline bereit.
-const VERSION = 'edge-1.0.0';
+const VERSION = 'edge-1.1.0';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,7 @@ const ASSETS = [
   './js/views/calendar.js',
   './js/views/stats.js',
   './js/views/journal.js',
+  './js/views/check.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

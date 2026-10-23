@@ -4,6 +4,10 @@ Trading-Journal fürs iPhone, gebaut für Prop-Firm-Challenges: Trades festhalte
 
 Edge ist eine Web-App. Sie läuft offline und speichert alle Einträge nur auf dem Gerät, nichts davon landet in diesem Repository.
 
+## Vor dem Trade
+
+Der **Check** auf „Heute“ rechnet die Lotgröße und zeigt eine Ampel: Rot, wenn eine Grenze oder Regel verletzt ist (Tageslimit, Verluste in Folge, Pause nach einem Verlust, eigene Regeln), Gelb bei Warnzeichen (gegen den Marktplan, Stress, Symbole oder Uhrzeiten, die bisher schlecht liefen), Grün, wenn alles passt. Ist der Trade raus, merkt Edge ihn sich; das Ergebnis kommt später von Hand oder per MT5-Screenshot dazu.
+
 ## Installieren
 
 1. Die Seite dieses Repositorys (GitHub Pages) in **Safari** öffnen.

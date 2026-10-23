@@ -1,5 +1,5 @@
 // Edge · Trades: Logbuch, Eintragen/Bearbeiten, Details, Lot-Rechner, Import aus MT5-Screenshots
-import { S, saveTrade, deleteTrade, savePic, picURL, deletePic, saveSettings, activeAccount, accountTrades } from '../store.js';
+import { S, saveTrade, deleteTrade, savePic, picURL, deletePic, saveSettings, activeAccount, accountTrades, removeOpen } from '../store.js';
 import {
   symInfo,
   riskOf,
@@ -17,8 +17,8 @@ import {
   accountState,
   guard,
   personal,
-  lotCalc,
   kpis,
+  CHECK,
 } from '../edge.js';
 import { extractTrades, errorText, connect } from '../gemini.js';
 import { prepareChart, prepareForAI } from '../img.js';
@@ -99,7 +99,7 @@ act('t-sym', (el) => {
 
 /* ---------- Trade eintragen / bearbeiten ---------- */
 const TFS = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
-function recentSymbols() {
+export function recentSymbols() {
   const seen = [];
   for (const t of [...S.trades.values()].sort((a, b) => b.closeAt - a.closeAt)) {
     const s = symInfo(t.symbol).sym;
@@ -109,7 +109,8 @@ function recentSymbols() {
   return [...new Set([...seen, ...S.settings.symbols])].slice(0, 10);
 }
 
-export function openTradeForm({ id = null, prefill = {}, onSaved = null } = {}) {
+// openId: Ergebnis zu einem offenen Trade aus dem Check eintragen
+export function openTradeForm({ id = null, prefill = {}, onSaved = null, openId = null } = {}) {
   const orig = id ? S.trades.get(id) : null;
   // Beim Bearbeiten zählt das Konto des Trades, nicht das gerade aktive
   const acc = (orig && S.accounts.get(orig.accountId)) || activeAccount();
@@ -146,12 +147,13 @@ export function openTradeForm({ id = null, prefill = {}, onSaved = null } = {}) 
   f.checks = { ...(f.checks || {}) };
   let pic = null; // neues Bild (Blob) oder 'remove'
   const rules = S.settings.rules;
-  const sheet = openSheet({ title: orig ? 'Trade bearbeiten' : 'Neuer Trade', cls: 'tall', onClose: () => stopDictation() });
+  const sheet = openSheet({ title: orig ? 'Trade bearbeiten' : openId ? 'Ergebnis eintragen' : 'Neuer Trade', cls: 'tall', onClose: () => stopDictation() });
   const ccy = acc.currency;
   const field = (id2, label, v, ph = '', mode = 'decimal') =>
     `<label class="li" for="${id2}"><span class="li-title">${label}</span><input class="num-in wide" id="${id2}" type="text" inputmode="${mode}" autocomplete="off" placeholder="${ph}" value="${v ?? ''}"></label>`;
   sheet.body.innerHTML = `<div class="form tform">
     ${orig ? '' : `<button type="button" class="btn btn-soft btn-block" id="tf-import">${icon('camera')} Aus MT5-Screenshot ausfüllen</button>`}
+    ${f.check ? `<div class="from-check"><i class="adot ${esc(f.check)}"></i><span>Ampel vor dem Einstieg: <b>${esc(CHECK[f.check] || '')}</b></span></div>` : ''}
     <div class="group-label">Symbol</div>
     <div class="chips" id="tf-syms">${recentSymbols().map((s) => `<button type="button" class="chip ${symInfo(f.symbol).sym === s ? 'on' : ''}" data-sym="${esc(s)}">${esc(s)}</button>`).join('')}</div>
     <div class="group"><div class="li"><input class="li-input" id="tf-symbol" placeholder="oder eintippen, z. B. EURUSD" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="20" value="${esc(f.symbol)}"></div></div>
@@ -411,8 +413,10 @@ export function openTradeForm({ id = null, prefill = {}, onSaved = null } = {}) 
       feelBefore: f.feelBefore,
       feelAfter: f.feelAfter,
       note: f.note,
+      check: f.check || null,
       source: orig?.source || prefill.source || 'hand',
     });
+    if (openId) await removeOpen(openId);
     if (pic instanceof Blob) await savePic(t.id, pic);
     else if (pic === 'remove' && S.pics.has(t.id)) await deletePic(t.id);
     sheet.close();
@@ -503,6 +507,7 @@ export async function openTrade(id) {
         ${row('Haltedauer', h != null ? fmtHold(h) : null)}
         ${row('Setup', t.setup ? esc(t.setup) : null)}
         ${row('Zeiteinheit', t.tf)}
+        ${row('Ampel vorher', t.check ? `<i class="adot ${esc(t.check)}"></i> ${esc(CHECK[t.check] || '')}` : null)}
         ${row('Gefühl vorher / nachher', t.feelBefore || t.feelAfter ? `${t.feelBefore ? FEEL[t.feelBefore - 1] : '–'} / ${t.feelAfter ? FEEL[t.feelAfter - 1] : '–'}` : null)}
       </div>
       ${
@@ -539,134 +544,6 @@ export function viewer(url, caption) {
   });
   document.body.appendChild(el);
 }
-
-/* ---------- Lot-Rechner ---------- */
-export function openCalculator() {
-  const acc = activeAccount();
-  if (!acc) {
-    toast('Lege zuerst dein Konto an.');
-    return;
-  }
-  const st = accountState(acc);
-  const ccy = acc.currency;
-  const c = { risk: S.settings.risk || 1, symbol: recentSymbols()[0] || 'EURUSD', entry: null, sl: null, mode: 'price', pips: null, balance: Math.round(st.bal) };
-  const sheet = openSheet({ title: 'Lot-Rechner', cls: 'tall' });
-  sheet.body.innerHTML = `<div class="form">
-    <div class="calc-out" id="lc-out"></div>
-    <div class="group">
-      <label class="li" for="lc-bal"><span class="li-title">Kontostand</span><span class="unit-in"><input class="num-in wide" id="lc-bal" type="text" inputmode="decimal" value="${c.balance}"><small>${esc(ccy)}</small></span></label>
-    </div>
-    <div class="group-label">Risiko pro Trade</div>
-    <div class="chips" id="lc-risks">${[0.25, 0.5, 1, 1.5, 2].map((v) => `<button type="button" class="chip ${c.risk === v ? 'on' : ''}" data-r="${v}">${fmtNum(v, v % 1 ? 2 : 0).replace(/0$/, '')} %</button>`).join('')}</div>
-    <div class="group"><label class="li" for="lc-risk"><span class="li-title">Eigener Wert</span><span class="unit-in"><input class="num-in" id="lc-risk" type="text" inputmode="decimal" value="${String(c.risk).replace('.', ',')}"><small>%</small></span></label></div>
-    <div class="group-label">Symbol</div>
-    <div class="chips" id="lc-syms">${recentSymbols().map((s) => `<button type="button" class="chip ${c.symbol === s ? 'on' : ''}" data-sym="${esc(s)}">${esc(s)}</button>`).join('')}</div>
-    <div class="group"><div class="li"><input class="li-input" id="lc-symbol" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="20" value="${esc(c.symbol)}"></div></div>
-    <div class="group-label">Stop-Loss</div>
-    ${segHTML('lc-mode', [
-      ['price', 'Mit Preisen'],
-      ['pips', 'Abstand in Pips/Punkten'],
-    ], c.mode, 'sm')}
-    <div class="group" id="lc-prices">
-      <label class="li" for="lc-entry"><span class="li-title">Einstieg</span><input class="num-in wide" id="lc-entry" type="text" inputmode="decimal" placeholder="z. B. 1,08500"></label>
-      <label class="li lc-price" for="lc-sl"><span class="li-title">Stop-Loss</span><input class="num-in wide" id="lc-sl" type="text" inputmode="decimal" placeholder="z. B. 1,08300"></label>
-      <label class="li lc-pips" for="lc-pips"><span class="li-title" id="lc-pips-l">Abstand</span><input class="num-in wide" id="lc-pips" type="text" inputmode="decimal" placeholder="z. B. 20"></label>
-    </div>
-    <p class="note" id="lc-note"></p>
-    <button type="button" class="btn btn-soft btn-block" id="lc-use">${icon('plus')} Als Trade übernehmen</button>
-  </div>`;
-  const q = (s) => sheet.body.querySelector(s);
-  const out = () => {
-    c.balance = amount(q('#lc-bal').value) || 0;
-    c.risk = num(q('#lc-risk').value) || 0;
-    c.symbol = q('#lc-symbol').value.trim().toUpperCase();
-    c.entry = num(q('#lc-entry').value);
-    const info = symInfo(c.symbol || 'EURUSD');
-    q('#lc-pips-l').textContent = `Abstand in ${info.unit}`;
-    // Beispielpreise passend zum Symbol: letzter eigener Einstieg, sonst ein typischer Kurs
-    const last = [...S.trades.values()].filter((t) => t.entry && symInfo(t.symbol).sym === info.sym).sort((x, y) => y.closeAt - x.closeAt)[0]?.entry;
-    const ex = last || { USDJPY: 151.6, GBPJPY: 196.4, EURJPY: 164.2, XAUUSD: 2650, XAGUSD: 31.2, NAS100: 20500, US100: 20500, US30: 42800, GER40: 19400, DE40: 19400, BTCUSD: 65000 }[info.sym] || (info.kind === 'fx' ? (info.quote === 'JPY' ? 150 : 1.085) : 1000);
-    const dec = info.pip >= 1 ? 0 : Math.round(-Math.log10(info.pip)) + 1;
-    q('#lc-entry').placeholder = `z. B. ${fmtNum(ex, dec)}`;
-    q('#lc-sl').placeholder = `z. B. ${fmtNum(ex - info.pip * 20, dec)}`;
-    let sl = num(q('#lc-sl').value);
-    if (c.mode === 'pips') {
-      const p = num(q('#lc-pips').value);
-      sl = c.entry && p ? c.entry - p * info.pip : null;
-    }
-    c.sl = sl;
-    sheet.body.querySelector('.form').classList.toggle('pips-mode', c.mode === 'pips');
-    const res = c.entry && sl ? lotCalc({ balance: c.balance, riskPct: c.risk, symbol: c.symbol, entry: c.entry, sl, accCur: ccy }) : null;
-    const riskAmt = (c.balance * c.risk) / 100;
-    const warn =
-      st.dailyLeft == null
-        ? ''
-        : st.dailyLeft <= 0
-          ? `<p class="lc-warn">${icon('alert')} Dein Tagesverlust-Limit ist heute schon erreicht.</p>`
-          : riskAmt > st.dailyLeft
-            ? `<p class="lc-warn">${icon('alert')} Das ist mehr, als du heute noch verlieren darfst (${fmtMoney(st.dailyLeft, ccy)}).</p>`
-            : '';
-    q('#lc-out').innerHTML = `<div class="lc-big"><span>Lotgröße</span>${res?.lots != null ? `<b>${fmtNum(res.lots, 2)}</b>` : `<em>${c.mode === 'pips' ? `Einstieg und Abstand eintragen` : 'Einstieg und Stop-Loss eintragen'}</em>`}</div>
-      <div class="lc-meta"><span>Risiko <b>${fmtMoney(riskAmt, ccy)}</b></span>${res?.pips ? `<span>${fmtNum(res.pips, 1)} ${info.unit}</span>` : ''}${res?.valuePerPip ? `<span>${fmtMoney(res.valuePerPip, ccy, { dec: 2 })} pro ${info.unit === 'Pips' ? 'Pip' : 'Punkt'} und Lot</span>` : ''}</div>${warn}`;
-    const conv = info.quote !== ccy && !(info.kind === 'fx' && info.base === ccy);
-    q('#lc-note').innerHTML = res?.noRate
-      ? 'Für diese Währung fehlt ein Umrechnungskurs. Trag ihn in den Einstellungen ein.'
-      : `${info.kind === 'index' || info.kind === 'crypto' ? `Kontraktgröße ${fmtNum(info.contract, 0)} pro Lot, bei deinem Broker kann sie anders sein (Einstellungen → Symbole). ` : ''}${
-          conv ? `Umrechnung ${info.quote} → ${ccy} mit ungefährem Kurs. ` : ''
-        }Lots sind abgerundet, damit das Risiko nicht größer wird.`;
-  };
-  sheet.body.addEventListener('input', out);
-  sheet.body.addEventListener('click', (e) => {
-    const r = e.target.closest('[data-r]');
-    if (r) {
-      q('#lc-risk').value = r.dataset.r.replace('.', ',');
-      sheet.body.querySelectorAll('[data-r]').forEach((b) => b.classList.toggle('on', b === r));
-      haptic();
-      out();
-      return;
-    }
-    const s = e.target.closest('[data-sym]');
-    if (s) {
-      q('#lc-symbol').value = s.dataset.sym;
-      sheet.body.querySelectorAll('[data-sym]').forEach((b) => b.classList.toggle('on', b === s));
-      haptic();
-      out();
-      return;
-    }
-    const seg = e.target.closest('.seg button');
-    if (seg) {
-      setSeg(seg);
-      c.mode = seg.dataset.v;
-      haptic();
-      out();
-    }
-  });
-  q('#lc-use').addEventListener('click', () => {
-    out();
-    const info = symInfo(c.symbol);
-    const res = c.entry && c.sl ? lotCalc({ balance: c.balance, riskPct: c.risk, symbol: c.symbol, entry: c.entry, sl: c.sl, accCur: ccy }) : null;
-    sheet.close();
-    setTimeout(
-      () =>
-        openTradeForm({
-          prefill: {
-            symbol: info.sym,
-            lots: res?.lots ?? null,
-            entry: c.entry,
-            // auf die Kursgenauigkeit runden, sonst steht 1.0830000000000002 im Feld
-            sl: c.sl ? +c.sl.toFixed(info.pip >= 1 ? 1 : Math.round(-Math.log10(info.pip)) + 1) : null,
-            side: c.sl && c.entry && c.sl > c.entry ? 'short' : 'long',
-            pnl: null,
-            openAt: Date.now(),
-            fromCalc: c.mode === 'pips',
-          },
-        }),
-      200,
-    );
-  });
-  out();
-}
-act('t-calc', () => openCalculator());
 
 /* ---------- Import aus MT5-Screenshot ---------- */
 const OFFSETS = [-3, -2, -1, 0, 1, 2, 3];
@@ -738,6 +615,24 @@ export function openImport() {
       });
     let dup = dupes();
     dup.forEach((d, i) => (pick[i] = !d));
+    // Passt ein importierter Trade zu einem offenen aus dem Check? Dann wandern Ampel, Setup und Regeln mit.
+    const matchOpen = (x, used) =>
+      S.open.find((o) => {
+        if (used.has(o.id) || o.accountId !== acc.id || o.symbol !== symInfo(x.symbol).sym || o.side !== x.side || Math.abs((o.lots || 0) - x.lots) > 0.005) return false;
+        const op = at(x.open);
+        const cl = at(x.close);
+        return op ? Math.abs(op - o.openAt) < 3 * 3600e3 : !cl || (o.openAt <= cl && cl - o.openAt < 3 * 864e5);
+      });
+    const links = () => {
+      const used = new Set();
+      return res.trades.map((x, i) => {
+        if (dup[i]) return null;
+        const o = matchOpen(x, used);
+        if (o) used.add(o.id);
+        return o || null;
+      });
+    };
+    let linked = links();
     const paint = () => {
       const n = pick.filter(Boolean).length;
       sheet.body.innerHTML = `<div class="form">
@@ -748,7 +643,7 @@ export function openImport() {
             const c = at(x.close);
             return `<button type="button" class="im-row ${pick[i] ? 'on' : ''}" data-i="${i}"><span class="cbox">${icon('check')}</span>
               <span class="tmain"><span class="tsym">${esc(symInfo(x.symbol).sym)} <small class="${x.side === 'short' ? 'loss' : 'win'}">${x.side === 'short' ? 'Short' : 'Long'}</small></span>
-              <span class="tsub">${fmtNum(x.lots, 2)} Lot${x.entry ? ` · ${fmtNum(x.entry, 5).replace(/0+$/, '')} → ${x.exit ? fmtNum(x.exit, 5).replace(/0+$/, '') : '–'}` : ''}${c ? ` · ${esc(fmtShort(iso(new Date(c))))} ${hm(c)}` : ''}${dup[i] ? ' · <b>schon eingetragen</b>' : ''}</span></span>
+              <span class="tsub">${fmtNum(x.lots, 2)} Lot${x.entry ? ` · ${fmtNum(x.entry, 5).replace(/0+$/, '')} → ${x.exit ? fmtNum(x.exit, 5).replace(/0+$/, '') : '–'}` : ''}${c ? ` · ${esc(fmtShort(iso(new Date(c))))} ${hm(c)}` : ''}${dup[i] ? ' · <b>schon eingetragen</b>' : linked[i] ? ' · <b>mit deinem Check</b>' : ''}</span></span>
               <span class="tres ${tone(net)}"><b>${fmtMoney(net, acc.currency, { sign: true, dec: 2 })}</b></span></button>`;
           })
           .join('')}</div>
@@ -772,6 +667,7 @@ export function openImport() {
       if (o) {
         off = clamp(off + Number(o.dataset.off), OFFSETS[0], OFFSETS[OFFSETS.length - 1]);
         dup = dupes();
+        linked = links();
         haptic();
         paint();
         return;
@@ -783,34 +679,44 @@ export function openImport() {
         await saveSettings({ serverOffset: off });
         let n = 0;
         let last = null;
-        res.trades.forEach((x, i) => {
-          if (!pick[i]) return;
+        let merged = 0;
+        for (const [i, x] of res.trades.entries()) {
+          if (!pick[i]) continue;
           const closeAt = at(x.close) || Date.now();
+          const o = linked[i];
           last = saveTrade({
             id: uid(),
             accountId: acc.id,
             symbol: symInfo(x.symbol).sym,
             side: x.side,
             lots: x.lots,
-            entry: x.entry,
+            entry: x.entry || o?.entry || null,
             exit: x.exit,
-            sl: x.sl,
-            tp: x.tp,
+            sl: x.sl || o?.sl || null,
+            tp: x.tp || o?.tp || null,
             pnl: Math.round((x.profit + x.fees) * 100) / 100,
-            openAt: at(x.open),
+            openAt: at(x.open) || o?.openAt || null,
             closeAt,
             day: tradingDay(closeAt, acc.resetHour),
+            setup: o?.setup || null,
+            feelBefore: o?.feelBefore || null,
             mistakes: [],
-            checks: {},
-            rulesOk: null,
+            checks: o?.checks || {},
+            rulesOk: o ? o.rulesOk : null,
+            check: o?.check || null,
             source: 'mt5',
           });
+          if (o) {
+            await removeOpen(o.id);
+            merged++;
+          }
           n++;
-        });
+        }
         sheet.close();
         haptic('success');
         app.refresh();
-        toast(n === 1 ? 'Trade übernommen. Ergänz noch Setup und Gefühl.' : `${n} Trades übernommen. Ergänz noch Setup und Gefühl.`, {
+        const tail = merged === n ? 'Ampel und Regeln aus deinem Check sind dabei.' : 'Ergänz noch Setup und Gefühl.';
+        toast(n === 1 ? `Trade übernommen. ${tail}` : `${n} Trades übernommen. ${tail}`, {
           icon: icon('check'),
           ms: 5000,
           action: n === 1 ? 'Ergänzen' : undefined,

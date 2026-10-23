@@ -1,5 +1,5 @@
 // Edge · Beispieldaten: eine laufende 100k-Challenge mit typischen Mustern (alle mit demo: true markiert)
-import { S, putMany, saveSettings, reindex } from './store.js';
+import { S, putMany, saveSettings, reindex, saveOpen } from './store.js';
 import { today, fromISO, addDays } from './util.js';
 import { symInfo, tradingDay, insights } from './edge.js';
 
@@ -80,7 +80,7 @@ export async function loadDemo() {
       data = d;
     }
   }
-  const { acc, old, days } = data;
+  const { acc, old, days, open } = data;
   // Nach dem gerissenen Limit wäre das alte Konto zu gewesen
   const end = story(old, data.trades).breach || Infinity;
   const trades = data.trades.filter((t) => t.accountId !== old.id || t.closeAt <= end);
@@ -94,6 +94,7 @@ export async function loadDemo() {
   await putMany('accounts', [acc, old]);
   await putMany('trades', trades);
   await putMany('days', days.filter((d) => S.days.get(d.date) === d));
+  for (const o of open) if (!S.open.some((x) => x.id === o.id)) await saveOpen(o);
   await saveSettings({ demoLoaded: true, activeAccount: S.settings.activeAccount && S.accounts.has(S.settings.activeAccount) && !S.accounts.get(S.settings.activeAccount).demo ? S.settings.activeAccount : acc.id });
 }
 
@@ -168,6 +169,9 @@ function build(seed) {
     const checks = Object.fromEntries(rules.map((ru) => [ru.id, !rulesBroken || r() < 0.4]));
     if (rulesBroken) checks[pick(rules).id] = false;
     const closeAt = open + hold;
+    // Den Check gibt es in den letzten drei Wochen: Rot bei Revenge und zu viel Risiko, Gelb bei gebrochenen Regeln
+    const recent = a.status !== 'verloren' && closeAt > now - 21 * 864e5;
+    const check = recent ? (revenge || bigRisk ? 'red' : rulesBroken ? 'yellow' : r() < 0.85 ? 'green' : 'yellow') : null;
     const t = {
       id: `demo-t-${trades.length}`,
       accountId: a.id,
@@ -190,6 +194,7 @@ function build(seed) {
       feelBefore: feel,
       feelAfter: win ? 3 + Math.floor(r() * 3) : 1 + Math.floor(r() * 3),
       note: win ? pick(['Sauberer Einstieg nach Bestätigung.', 'Geduldig gewartet, Plan aufgegangen.', '']) : pick(['Zu früh rein, keine Bestätigung abgewartet.', 'Gegen den höheren Trend.', 'News unterschätzt.', '']),
+      check,
       source: 'hand',
       demo: true,
       createdAt: closeAt,
@@ -246,5 +251,24 @@ function build(seed) {
       updatedAt: now,
     });
   }
-  return { acc, old, trades, days };
+  // Ein Trade läuft gerade: geprüft, Ampel grün
+  const live = {
+    id: 'demo-open-1',
+    accountId: acc.id,
+    symbol: 'XAUUSD',
+    side: 'long',
+    lots: 0.5,
+    entry: 2652.4,
+    sl: 2646.4,
+    tp: 2664.4,
+    risk: 300,
+    setup: 'Pullback',
+    feelBefore: 4,
+    checks: Object.fromEntries(S.settings.rules.map((ru) => [ru.id, true])),
+    rulesOk: true,
+    check: 'green',
+    openAt: now - 28 * 60e3,
+    demo: true,
+  };
+  return { acc, old, trades, days, open: [live] };
 }
