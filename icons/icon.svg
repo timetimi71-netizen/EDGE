@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+  <radialGradient id="bg" cx="24%" cy="14%" r="112%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f3f5fb"/><stop offset="1" stop-color="#dfe5f5"/></radialGradient>
+  <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#3d6bff" stop-opacity=".14"/><stop offset=".6" stop-color="#3d6bff" stop-opacity=".04"/><stop offset="1" stop-color="#3d6bff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7686"/><stop offset="1" stop-color="#e03a50"/></linearGradient>
+  <linearGradient id="green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#36dd92"/><stop offset="1" stop-color="#13a560"/></linearGradient>
+  <linearGradient id="line" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7b98ff"/><stop offset="1" stop-color="#2350e0"/></linearGradient>
+</defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g transform="translate(512 512) scale(1) translate(-512 -512)">
+  <circle cx="512" cy="540" r="420" fill="url(#glow)"/>
+  <path d="M224 742 L420 600 L560 676 L812 430" fill="none" stroke="url(#line)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
+  <path d="M384 238 V318 M384 634 V744" stroke="#c03247" stroke-width="30" stroke-linecap="round"/>
+  <rect x="310" y="318" width="148" height="316" rx="38" fill="url(#red)"/>
+  <path d="M640 168 V238 M640 552 V650" stroke="#0d8c51" stroke-width="30" stroke-linecap="round"/>
+  <rect x="566" y="238" width="148" height="314" rx="38" fill="url(#green)"/></g></svg>
