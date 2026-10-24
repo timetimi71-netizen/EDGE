@@ -3,6 +3,7 @@ import { S, activeAccount, accountTrades } from '../store.js';
 import { accountState, guard, personal, fmtMoney, fmtPct, tone, phaseName, insights, symInfo } from '../edge.js';
 import { tradeRow } from './trades.js';
 import { openCardHTML } from './check.js';
+import { ago } from './mt5.js';
 import { icon, logoSVG } from '../ui.js';
 import { esc, today, fromISO, WD_LONG, MONTHS, fmtNum, IS_IOS, IS_STANDALONE, IS_PREVIEW } from '../util.js';
 import { act } from '../app.js';
@@ -79,6 +80,7 @@ function dashboard(acc) {
         <div class="gbar goal"><i style="--w:${(pct * 100).toFixed(1)}%"></i></div></div>`
         : ''
     }
+    ${mt5Line(acc)}
     ${st.minDays ? `<div class="acc-days">${icon('calendar')} ${st.tradingDays >= st.minDays ? `Mindest-Handelstage erfüllt · ${st.tradingDays} gehandelt` : `${st.tradingDays} von ${st.minDays} Mindest-Handelstagen`}</div>` : ''}
   </button>
   ${
@@ -117,6 +119,18 @@ function dashboard(acc) {
       ? `<button type="button" class="card insight-mini" data-act="go" data-to="stats"><div class="eyebrow">${icon('sparkle')} Wo geht Geld verloren?</div><b>${esc(ins.title)}</b><p>${ins.text}</p><span class="link">Zur Analyse ${icon('chevR')}</span></button>`
       : ''
   }`;
+}
+
+// Was MT5 selbst sagt: zeigt sofort, wenn Edge und das echte Konto auseinanderlaufen
+function mt5Line(acc) {
+  const cfg = S.settings.mt5;
+  if (!cfg?.key || (cfg.accountId && cfg.accountId !== acc.id)) return '';
+  const last = cfg.last;
+  if (last?.state === 'ok' && last.equity != null) {
+    return `<div class="acc-mt5">${icon('repeat')} MT5 · Equity ${fmtMoney(last.equity, acc.currency, { dec: 2 })} · ${ago(last.at)}</div>`;
+  }
+  if (last && !['ok', 'waiting', 'offline'].includes(last.state)) return `<div class="acc-mt5 bad">${icon('alert')} MT5-Abruf klappt gerade nicht</div>`;
+  return '';
 }
 
 function limitsCard(p, st) {

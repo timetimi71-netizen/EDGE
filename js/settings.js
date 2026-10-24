@@ -8,8 +8,9 @@ import { saveFile } from './file.js';
 import { stopDictation } from './speech.js';
 import { loadDemo } from './demo.js';
 import { openKeySheet } from './views/trades.js';
+import { syncSummary } from './views/mt5.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 const ACCENTS = [
   ['kobalt', '#3d6bff', 'Kobalt'],
@@ -267,6 +268,10 @@ function settingsHTML() {
     </div>
     <p class="note group-note">Bei Indizes ist die Kontraktgröße je nach Broker anders. Sie steht in MT5 unter Symbol → Spezifikation.</p>
 
+    <div class="group-label">MT5 automatisch</div>
+    <div class="group">
+      <button type="button" class="li" data-act="mt5-setup"><span class="li-ic">${icon('repeat')}</span><span class="li-main"><span class="li-title">Trades automatisch aus MT5</span><span class="li-sub">${esc(syncSummary())}</span></span><span class="li-end">${icon('chevR')}</span></button>
+    </div>
     <div class="group-label">Screenshots aus MT5</div>
     <div class="group">
       <button type="button" class="li" data-act="set-key"><span class="li-ic">${icon('camera')}</span><span class="li-main"><span class="li-title">Gemini-Schlüssel</span><span class="li-sub">${st.geminiKey ? `Verbunden${st.geminiModel ? ` · ${esc(st.geminiModel)}` : ''}` : 'Nicht eingerichtet'}</span></span><span class="li-end">${icon('chevR')}</span></button>

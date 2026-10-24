@@ -359,7 +359,8 @@ export async function buildBackup() {
     const rec = await picRecord(id);
     if (rec) pics.push({ id, data: await blobToDataURL(new Blob([rec.data], { type: rec.type })) });
   }
-  const { pinHash, pinSalt, ...settings } = S.settings;
+  // MT5-Schlüssel und PIN bleiben auf dem Gerät
+  const { pinHash, pinSalt, mt5, ...settings } = S.settings;
   // Der Gemini-Schlüssel bleibt auf dem Gerät und landet nicht in der Backup-Datei.
   settings.geminiKey = '';
   settings.geminiModel = '';
@@ -400,7 +401,7 @@ export async function restoreBackup(data) {
     pics++;
   }
   if (data.settings) {
-    const { pinHash, pinSalt, onboarded, demoLoaded, geminiKey, geminiModel, ...rest } = data.settings;
+    const { pinHash, pinSalt, onboarded, demoLoaded, geminiKey, geminiModel, mt5, ...rest } = data.settings;
     const merged = mergeSettings({ ...S.settings, ...rest });
     merged.geminiKey = S.settings.geminiKey;
     merged.geminiModel = S.settings.geminiModel;

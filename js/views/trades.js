@@ -507,6 +507,8 @@ export async function openTrade(id) {
         ${row('Haltedauer', h != null ? fmtHold(h) : null)}
         ${row('Setup', t.setup ? esc(t.setup) : null)}
         ${row('Zeiteinheit', t.tf)}
+        ${row('Geschlossen durch', t.exitReason === 'sl' ? 'Stop-Loss' : t.exitReason === 'tp' ? 'Take-Profit' : t.exitReason === 'so' ? 'Stop-Out' : null)}
+        ${row('Quelle', t.mt5 ? 'MT5 automatisch' : t.source === 'mt5' ? 'MT5-Screenshot' : null)}
         ${row('Ampel vorher', t.check ? `<i class="adot ${esc(t.check)}"></i> ${esc(CHECK[t.check] || '')}` : null)}
         ${row('Gefühl vorher / nachher', t.feelBefore || t.feelAfter ? `${t.feelBefore ? FEEL[t.feelBefore - 1] : '–'} / ${t.feelAfter ? FEEL[t.feelAfter - 1] : '–'}` : null)}
       </div>

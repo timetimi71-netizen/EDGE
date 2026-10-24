@@ -271,20 +271,44 @@ export function openCheck() {
 act('t-check', () => openCheck());
 
 /* ---------- Offene Trades auf „Heute“ ---------- */
+// Laufende Positionen laut MT5 (aus dem automatischen Abruf, höchstens drei Stunden alt)
+function livePositions(acc) {
+  const cfg = S.settings.mt5;
+  const last = cfg?.last;
+  if (!cfg?.key || last?.state !== 'ok' || (cfg.accountId && cfg.accountId !== acc.id) || Date.now() - last.at > 3 * 3600e3) return [];
+  return last.positions || [];
+}
+
 export function openCardHTML(acc) {
   const list = openOf(acc.id);
-  if (!list.length) return '';
+  const live = livePositions(acc);
+  const used = new Set();
+  // Check-Einträge mit ihrer MT5-Position verbinden
+  const match = (o) => {
+    const p = live.find((x, i) => !used.has(i) && x.symbol === o.symbol && x.side === o.side && Math.abs((x.lots || 0) - (o.lots || 0)) < 0.005);
+    if (p) used.add(live.indexOf(p));
+    return p;
+  };
+  const pairs = list.map((o) => [o, match(o)]);
+  const extra = live.filter((x, i) => !used.has(i));
+  if (!list.length && !extra.length) return '';
   const t0 = today();
+  const since = (ms) => (iso(new Date(ms)) === t0 ? `seit ${hm(ms)}` : `seit ${fmtShort(iso(new Date(ms)))}`);
+  const float = (p) => (p ? ` · <b class="${p.profit > 0 ? 'win' : p.profit < 0 ? 'loss' : ''}">${fmtMoney(p.profit, acc.currency, { sign: true })}</b> offen` : '');
   return `<section class="card open-card">
-    <div class="card-h"><h2 class="card-t">${icon('clock')} Läuft gerade</h2><span class="faint small">Ergebnis fehlt noch</span></div>
-    ${list
-      .map((o) => {
-        const d = iso(new Date(o.openAt));
-        const since = d === t0 ? `seit ${hm(o.openAt)}` : `seit ${fmtShort(d)}`;
+    <div class="card-h"><h2 class="card-t">${icon('clock')} Läuft gerade</h2><span class="faint small">${S.settings.mt5?.key ? 'Ergebnis kommt aus MT5' : 'Ergebnis fehlt noch'}</span></div>
+    ${pairs
+      .map(([o, p]) => {
         return `<div class="orow"><span class="tside ${o.side === 'short' ? 'short' : 'long'}">${icon(o.side === 'short' ? 'down' : 'up')}</span>
-        <span class="tmain"><span class="tsym">${esc(o.symbol)} <i class="adot ${esc(o.check || 'open')}" title="Ampel ${esc(CHECK[o.check] || '')}"></i></span><span class="tsub">${fmtNum(o.lots || 0, 2)} Lot · ${since}${o.risk ? ` · Risiko ${fmtMoney(o.risk, acc.currency)}` : ''}</span></span>
+        <span class="tmain"><span class="tsym">${esc(o.symbol)} <i class="adot ${esc(o.check || 'open')}" title="Ampel ${esc(CHECK[o.check] || '')}"></i></span><span class="tsub">${fmtNum(o.lots || 0, 2)} Lot · ${since(o.openAt)}${p ? float(p) : o.risk ? ` · Risiko ${fmtMoney(o.risk, acc.currency)}` : ''}</span></span>
         <span class="oacts"><button type="button" class="btn btn-primary btn-sm" data-act="open-done" data-id="${esc(o.id)}">Ergebnis</button><button type="button" class="icon-btn sm" data-act="open-drop" data-id="${esc(o.id)}" aria-label="Verwerfen">${icon('close')}</button></span></div>`;
       })
+      .join('')}
+    ${extra
+      .map(
+        (p) => `<div class="orow"><span class="tside ${p.side === 'short' ? 'short' : 'long'}">${icon(p.side === 'short' ? 'down' : 'up')}</span>
+        <span class="tmain"><span class="tsym">${esc(p.symbol)} <small class="faint">aus MT5</small></span><span class="tsub">${fmtNum(p.lots || 0, 2)} Lot · ${since(p.openAt)}${float(p)}</span></span></div>`,
+      )
       .join('')}
   </section>`;
 }

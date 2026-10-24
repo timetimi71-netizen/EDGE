@@ -11,6 +11,7 @@ import * as journalView from './views/journal.js';
 import { applySettings, showLock, showOnboarding } from './settings.js';
 import { stopDictation } from './speech.js';
 import { loadDemo } from './demo.js';
+import { pullSync, syncOn } from './sync.js';
 
 const VIEWS = { today: todayView, trades: tradesView, calendar: calendarView, stats: statsView, journal: journalView };
 const TABS = [
@@ -177,6 +178,7 @@ function wire() {
     } else {
       if (S.settings.pinHash && hiddenAt && Date.now() - hiddenAt >= S.settings.lockAfter * 1000) showLock();
       if (today() !== renderedDay && !topSheet()) app.refresh();
+      autoSync();
     }
   });
   window.addEventListener('pagehide', flushWrites);
@@ -222,6 +224,20 @@ async function boot() {
   app.go('today', { instant: true });
   if (!S.settings.onboarded && !IS_PREVIEW) showOnboarding();
   registerSW();
+  if (!IS_PREVIEW) {
+    autoSync();
+    setInterval(() => !document.hidden && autoSync(), 5 * 60e3);
+  }
+}
+
+// MT5 automatisch: neue Trades abholen, wenn die App aufgeht (höchstens alle zwei Minuten)
+async function autoSync() {
+  if (IS_PREVIEW || !syncOn() || Date.now() - (S.settings.mt5?.last?.checked || 0) < 2 * 60e3) return;
+  const r = await pullSync();
+  if (r.state !== 'ok') return;
+  if (r.added) toast(r.added === 1 ? 'Ein neuer Trade aus MT5' : `${r.added} neue Trades aus MT5`, { icon: icon('repeat'), ms: 4000 });
+  // Nicht neu zeichnen, während jemand gerade tippt
+  if (!topSheet() && !document.activeElement?.closest?.('#view textarea, #view input')) app.refresh();
 }
 
 boot().catch((err) => {

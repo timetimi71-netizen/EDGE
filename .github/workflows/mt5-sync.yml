@@ -1,0 +1,79 @@
+# Edge · MT5 automatisch: etwa alle 30 Minuten (Sonntagabend bis Freitag) meldet sich ein GitHub-Rechner mit dem
+# Investor-Passwort bei MT5 an und legt die Trades verschlüsselt im Zweig „mt5-data“ ab. Edge holt sie dort ab.
+# Läuft nur, wenn die Secrets MT5_LOGIN, MT5_PASSWORD, MT5_SERVER und SYNC_KEY gesetzt sind.
+name: MT5 Sync
+on:
+  schedule:
+    - cron: '7,37 * * * 1-5'
+    - cron: '7,37 21-23 * * 0'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: mt5-sync
+  cancel-in-progress: false
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      on: ${{ steps.check.outputs.on }}
+    steps:
+      - id: check
+        env:
+          LOGIN: ${{ secrets.MT5_LOGIN }}
+          KEY: ${{ secrets.SYNC_KEY }}
+        run: |
+          if [ -n "$LOGIN" ] && [ -n "$KEY" ]; then echo "on=true" >> "$GITHUB_OUTPUT"; else echo "on=false" >> "$GITHUB_OUTPUT"; fi
+  sync:
+    needs: gate
+    if: needs.gate.outputs.on == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: sync
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: MT5 aus dem Zwischenspeicher
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: C:\Program Files\MetaTrader 5
+          key: mt5-v2-none
+          restore-keys: mt5-v2-
+      - name: MT5 installieren
+        if: steps.restore.outputs.cache-matched-key == ''
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe -OutFile mt5setup.exe
+          Start-Process -FilePath .\mt5setup.exe -ArgumentList '/auto' -Wait
+          Stop-Process -Name terminal64 -Force -ErrorAction SilentlyContinue
+      - run: pip install --quiet MetaTrader5 cryptography
+      - name: Trades holen
+        id: sync
+        env:
+          MT5_LOGIN: ${{ secrets.MT5_LOGIN }}
+          MT5_PASSWORD: ${{ secrets.MT5_PASSWORD }}
+          MT5_SERVER: ${{ secrets.MT5_SERVER }}
+          MT5_COMPANY: ${{ secrets.MT5_COMPANY }}
+          SYNC_KEY: ${{ secrets.SYNC_KEY }}
+        run: python sync/mt5_sync.py
+      - name: Zwischenspeicher sichern
+        if: steps.sync.outputs.cachekey != '' && steps.sync.outputs.cachekey != steps.restore.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: C:\Program Files\MetaTrader 5
+          key: ${{ steps.sync.outputs.cachekey }}
+      - name: Für Edge ablegen
+        shell: bash
+        run: |
+          mkdir -p /tmp/out && cp sync.json /tmp/out/
+          cd /tmp/out
+          git init -q -b mt5-data
+          git config user.name "edge-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sync.json
+          git commit -qm "MT5-Abruf"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" mt5-data
