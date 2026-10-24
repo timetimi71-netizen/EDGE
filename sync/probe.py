@@ -31,6 +31,34 @@ def procs():
     r = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq terminal64.exe'], capture_output=True, text=True)
     return r.stdout.strip().splitlines()[-3:]
 
+import ctypes, threading
+from ctypes import wintypes
+user32 = ctypes.windll.user32
+closed = []
+WNDENUM = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+def title(h):
+    n = user32.GetWindowTextLengthW(h)
+    b = ctypes.create_unicode_buffer(n + 1)
+    user32.GetWindowTextW(h, b, n + 1)
+    return b.value
+# Dialoge, die MT5 beim ersten Start öffnet und die alles blockieren
+BLOCKERS = ('Open an Account', 'Welcome to LiveUpdate', 'Login', 'LiveUpdate', 'Open an account')
+def closer(stop):
+    while not stop.is_set():
+        hits = []
+        def cb(h, _):
+            if user32.IsWindowVisible(h):
+                t = title(h)
+                if any(t.startswith(x) for x in BLOCKERS):
+                    hits.append((h, t))
+            return True
+        user32.EnumWindows(WNDENUM(cb), 0)
+        for h, t in hits:
+            user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
+            closed.append((round(time.time()), t))
+        time.sleep(2)
+stop = threading.Event()
+threading.Thread(target=closer, args=(stop,), daemon=True).start()
 try:
     import MetaTrader5 as mt5
     out['pkg'] = getattr(mt5, '__version__', '?')
@@ -62,6 +90,8 @@ try:
         mt5.shutdown()
 except Exception as e:
     out['exception'] = repr(e)
+stop.set()
+out['closed'] = closed[:30]
 out['logs'] = logs()
 json.dump(out, open('status.json', 'w'), indent=1, default=str)
 print(json.dumps(out, indent=1, default=str)[:6000])
