@@ -1,4 +1,4 @@
-# Edge · MT5 automatisch: etwa alle 30 Minuten (So abends bis Fr) meldet sich ein GitHub-Rechner mit dem
+# Edge · MT5 automatisch: etwa alle 30 Minuten (Sonntagabend bis Freitag) meldet sich ein GitHub-Rechner mit dem
 # Investor-Passwort bei MT5 an und legt die Trades verschlüsselt im Zweig „mt5-data“ ab. Edge holt sie dort ab.
 # Läuft nur, wenn die Secrets MT5_LOGIN, MT5_PASSWORD, MT5_SERVER und SYNC_KEY gesetzt sind.
 name: MT5 Sync Test
@@ -35,13 +35,14 @@ jobs:
         with:
           python-version: '3.12'
       - name: MT5 aus dem Zwischenspeicher
-        id: cache
-        uses: actions/cache@v4
+        id: restore
+        uses: actions/cache/restore@v4
         with:
           path: C:\Program Files\MetaTrader 5
-          key: mt5-terminal-test-v1
+          key: mt5-test-v2-none
+          restore-keys: mt5-test-v2-
       - name: MT5 installieren
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.restore.outputs.cache-matched-key == ''
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe -OutFile mt5setup.exe
@@ -49,13 +50,21 @@ jobs:
           Stop-Process -Name terminal64 -Force -ErrorAction SilentlyContinue
       - run: pip install --quiet MetaTrader5 cryptography
       - name: Trades holen
+        id: sync
         env:
           MT5_LOGIN: "12345678"
           MT5_PASSWORD: "invalid-probe"
           MT5_SERVER: "FTMO-Demo"
           MT5_COMPANY: ${{ secrets.MT5_COMPANY }}
           SYNC_KEY: "test-key"
+          CACHE_PREFIX: mt5-test-v2-
         run: python sync/mt5_sync.py
+      - name: Zwischenspeicher sichern
+        if: steps.sync.outputs.cachekey != '' && steps.sync.outputs.cachekey != steps.restore.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: C:\Program Files\MetaTrader 5
+          key: ${{ steps.sync.outputs.cachekey }}
       - name: Für Edge ablegen
         shell: bash
         run: |

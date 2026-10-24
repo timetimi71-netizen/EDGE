@@ -350,6 +350,11 @@ def main():
             except OSError:
                 pass
     json.dump(status, open(OUT, 'w'), separators=(',', ':'))
+    # Zwischenspeicher-Schlüssel je Firma (gehasht), damit die geladene Serverliste erhalten bleibt
+    if company and glob.glob(os.path.join(BASE, 'edge-search-*.txt')) and os.environ.get('GITHUB_OUTPUT'):
+        import hashlib
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write('cachekey=' + os.environ.get('CACHE_PREFIX', 'mt5-v2-') + hashlib.sha1(company.lower().encode()).hexdigest()[:10] + '\n')
     return 0
 
 
