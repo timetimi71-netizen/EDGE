@@ -81,15 +81,26 @@ try:
     subprocess.run(['taskkill', '/F', '/IM', 'terminal64.exe'], capture_output=True)
     time.sleep(3)
     # Einmal selbst starten (portable), dann verbinden
-    p = subprocess.Popen([path, '/portable'])
+    # Start mit Konfigurationsdatei: Anmeldung gleich beim Start, so wie es später mit echten Daten läuft
+    ini = os.path.join(base, 'edge-start.ini')
+    login = os.environ.get('MT5_LOGIN') or '12345678'
+    pw = os.environ.get('MT5_PASSWORD') or 'invalid-probe'
+    server = os.environ.get('MT5_SERVER') or 'MetaQuotes-Demo'
+    with open(ini, 'w', encoding='utf-16') as f:
+        f.write(f'[Common]\nLogin={login}\nPassword={pw}\nServer={server}\nKeepPrivate=1\nNewsEnable=0\nCertInstall=0\n[Experts]\nAllowLiveTrading=0\nAllowDllImport=0\nEnabled=1\nAccount=0\nProfile=0\n')
+    out['real_login'] = bool(os.environ.get('MT5_LOGIN'))
+    p = subprocess.Popen([path, '/portable', f'/config:{ini}'])
     t0 = time.time()
-    restarted.wait(240)
+    restarted.wait(100)
     out['restart_after_s'] = round(time.time() - t0, 1) if restarted.is_set() else None
     time.sleep(45)
     shot('screen1')
     out['procs_after_start'] = procs()
     t0 = time.time()
     ok = mt5.initialize(path=path, portable=True, timeout=90000)
+    if not ok:
+        out['init1_err'] = mt5.last_error()
+        ok = mt5.initialize(path=path, portable=True, timeout=60000, login=int(login), password=pw, server=server)
     out['init'] = ok
     out['init_err'] = mt5.last_error()
     out['init_s'] = round(time.time() - t0, 1)

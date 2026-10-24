@@ -24,6 +24,10 @@ jobs:
       - run: pip install MetaTrader5
       - name: Probe
         run: python sync/probe.py
+        env:
+          MT5_LOGIN: ${{ secrets.MT5_LOGIN }}
+          MT5_PASSWORD: ${{ secrets.MT5_PASSWORD }}
+          MT5_SERVER: ${{ secrets.MT5_SERVER }}
       - name: Status veröffentlichen
         if: always()
         shell: bash
