@@ -240,7 +240,33 @@ def wait_login(login, server, since, seconds):
     return 'connect' if seen else 'server'
 
 
+def forget_accounts():
+    for f in (os.path.join(BASE, 'config', 'accounts.dat'),):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
+
+def ensure_servers(company, dialogs, fresh=False):
+    """Einmal pro Firma die Serverliste laden (bleibt im Zwischenspeicher). Ohne gespeichertes Konto öffnet MT5 dafür
+    beim Start den Dialog „Open an Account“."""
+    marker = os.path.join(BASE, 'edge-search-' + ''.join(ch for ch in company.lower() if ch.isalnum()) + '.txt')
+    if os.path.exists(marker) and not fresh:
+        return
+    kill()
+    forget_accounts()
+    subprocess.Popen([TERMINAL, '/portable'])
+    found = dialogs.search_company(company)
+    kill()
+    if not found:
+        raise SyncError('search')
+    with open(marker, 'w') as f:
+        f.write(time.strftime('%Y-%m-%d'))
+
+
 def login_terminal(login, password, server, company, dialogs):
+    ensure_servers(company, dialogs)
     for attempt in range(2):
         kill()
         since = len(log_text().splitlines())
@@ -250,12 +276,9 @@ def login_terminal(login, password, server, company, dialogs):
             return
         if state == 'login':
             raise SyncError('login')
-        if attempt == 0:
-            # Server unbekannt: einmal über die Firmensuche nachladen
-            kill()
-            subprocess.Popen([TERMINAL, '/portable'])
-            if not dialogs.search_company(company):
-                raise SyncError('search')
+        if attempt == 0 and state == 'server':
+            # Server immer noch unbekannt: Suche frisch wiederholen
+            ensure_servers(company, dialogs, fresh=True)
     raise SyncError(state)
 
 
