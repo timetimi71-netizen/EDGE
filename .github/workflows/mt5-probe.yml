@@ -23,7 +23,7 @@ jobs:
           Get-ChildItem 'C:\Program Files\MetaTrader 5' | Select-Object -First 20
       - run: pip install MetaTrader5
       - name: Probe
-        run: python sync/probe2.py
+        run: python sync/probe3.py
         env:
           MT5_LOGIN: ${{ secrets.MT5_LOGIN }}
           MT5_PASSWORD: ${{ secrets.MT5_PASSWORD }}
