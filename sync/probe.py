@@ -54,10 +54,24 @@ def closer(stop):
             return True
         user32.EnumWindows(WNDENUM(cb), 0)
         for h, t in hits:
+            if t.startswith('Welcome to LiveUpdate'):
+                # Update annehmen: „Restart“ drücken, damit Terminal und Python-Paket zusammenpassen
+                btns = []
+                def cb2(c, _):
+                    if title(c).replace('&', '') == 'Restart':
+                        btns.append(c)
+                    return True
+                user32.EnumChildWindows(h, WNDENUM(cb2), 0)
+                if btns:
+                    user32.SendMessageW(btns[0], 0x00F5, 0, 0)  # BM_CLICK
+                    restarted.set()
+                    closed.append((round(time.time()), t + ' -> Restart'))
+                    continue
             user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
             closed.append((round(time.time()), t))
         time.sleep(2)
 stop = threading.Event()
+restarted = threading.Event()
 threading.Thread(target=closer, args=(stop,), daemon=True).start()
 try:
     import MetaTrader5 as mt5
@@ -68,7 +82,10 @@ try:
     time.sleep(3)
     # Einmal selbst starten (portable), dann verbinden
     p = subprocess.Popen([path, '/portable'])
-    time.sleep(35)
+    t0 = time.time()
+    restarted.wait(240)
+    out['restart_after_s'] = round(time.time() - t0, 1) if restarted.is_set() else None
+    time.sleep(45)
     shot('screen1')
     out['procs_after_start'] = procs()
     t0 = time.time()
