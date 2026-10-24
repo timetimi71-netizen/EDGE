@@ -1,0 +1,65 @@
+{
+ "servers_dat_before": 26492,
+ "dialog": true,
+ "controls": [
+  [
+   "#32770",
+   ""
+  ],
+  [
+   "Edit",
+   ""
+  ],
+  [
+   "Button",
+   "Find your company"
+  ],
+  [
+   "SysListView32",
+   "List1"
+  ],
+  [
+   "SysHeader32",
+   ""
+  ],
+  [
+   "SysTabControl32",
+   ""
+  ],
+  [
+   "Static",
+   ""
+  ],
+  [
+   "Button",
+   "< &Back"
+  ],
+  [
+   "Button",
+   "&Next >"
+  ],
+  [
+   "Button",
+   "Finish"
+  ],
+  [
+   "Button",
+   "Cancel"
+  ],
+  [
+   "Button",
+   "Help"
+  ],
+  [
+   "Static",
+   ""
+  ]
+ ],
+ "typed": true,
+ "clicked": true,
+ "servers_dat_after_search": 70592,
+ "log_search": [],
+ "login_lines": [
+  "OM\t2\t08:35:27.000\tNetwork\t'12345678': authorization on FTMO-Demo failed (Invalid account)"
+ ]
+}
