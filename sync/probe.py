@@ -82,7 +82,8 @@ try:
     time.sleep(3)
     # Einmal selbst starten (portable), dann verbinden
     # Start mit Konfigurationsdatei: Anmeldung gleich beim Start, so wie es später mit echten Daten läuft
-    ini = os.path.join(base, 'edge-start.ini')
+    os.makedirs(r'C:\mt5cfg', exist_ok=True)
+    ini = r'C:\mt5cfg\start.ini'
     login = os.environ.get('MT5_LOGIN') or '12345678'
     pw = os.environ.get('MT5_PASSWORD') or 'invalid-probe'
     server = os.environ.get('MT5_SERVER') or 'MetaQuotes-Demo'
@@ -105,12 +106,13 @@ try:
     out['init_err'] = mt5.last_error()
     out['init_s'] = round(time.time() - t0, 1)
     shot('screen2')
-    if ok:
+    if ok or (mt5.last_error() or [0])[0] == -6:
+        ok = True
         out['version'] = mt5.version()
         ti = mt5.terminal_info()
         out['terminal'] = {k: v for k, v in ti._asdict().items() if k in ('connected', 'path', 'data_path', 'build', 'company')} if ti else None
         tries = []
-        for server in ['FTMO-Demo', 'FTMO-Server', 'FundedNext-Server', 'ICMarketsSC-Demo', 'MetaQuotes-Demo']:
+        for server in ['MetaQuotes-Demo', 'FTMO-Demo', 'FTMO-Server', 'FundedNext-Server', 'ICMarketsSC-Demo', 'Pepperstone-Demo']:
             t1 = time.time()
             r = mt5.login(12345678, password='invalid-probe', server=server, timeout=30000)
             tries.append({'server': server, 'ok': r, 'err': mt5.last_error(), 's': round(time.time() - t1, 1)})
