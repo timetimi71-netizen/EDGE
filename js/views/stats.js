@@ -1,6 +1,6 @@
 // Statistik: Kennzahlen, Equity, Regeln, Sinn, einzelne Haken, Symbol, Richtung, Wochentag
 import { accTrades, activeAccount } from '../store.js';
-import { summarize, rOf, rulesOk, FEATURES, parseDate, isoDate, maxDrawdown } from '../model.js';
+import { summarize, rOf, rulesOk, FEATURES, parseDate, isoDate, maxDrawdown, MISTAKES, setupCombos, streaks } from '../model.js';
 import { esc, fmtR, fmtEur, fmtPct, fmtNum, tone, topbar } from '../ui.js';
 import { equityChart } from '../chart.js';
 
@@ -64,6 +64,26 @@ export function statsView(root) {
     return;
   }
 
+  const sk = streaks(list);
+  const rs = list.map(rOf).filter((r) => r != null);
+  const wR = rs.filter((r) => r > 0.1);
+  const lR = rs.filter((r) => r < -0.1);
+  const avgWin = wR.length ? wR.reduce((a, b) => a + b, 0) / wR.length : null;
+  const avgLoss = lR.length ? Math.abs(lR.reduce((a, b) => a + b, 0) / lR.length) : null;
+
+  // R-Verteilung
+  const BUCKETS = [['≤ −1', (r) => r <= -0.95], ['−1…0', (r) => r > -0.95 && r < -0.1], ['BE', (r) => Math.abs(r) <= 0.1], ['0…1', (r) => r > 0.1 && r < 1], ['1…2', (r) => r >= 1 && r < 2], ['2…3', (r) => r >= 2 && r < 3], ['3+', (r) => r >= 3]];
+  const dist = BUCKETS.map(([l, f]) => ({ l, n: rs.filter(f).length, neg: l.startsWith('≤') || l.startsWith('−') }));
+  const distMax = Math.max(1, ...dist.map((d) => d.n));
+
+  // Setup-Finder
+  const combos = setupCombos(list);
+
+  // Fehler
+  const mkRows = MISTAKES.map(([k, l]) => ({ label: l, list: list.filter((t) => t.mistakes?.includes(k)) })).filter((r) => r.list.length);
+  const clean = list.filter((t) => !t.mistakes?.length);
+  const mkCost = mkRows.map((r) => ({ ...r, sum: r.list.reduce((a, t) => a + (rOf(t) ?? 0), 0) })).sort((a, b) => a.sum - b.sum);
+
   // Drawdown in R und €
   let cr = 0;
   let ce = 0;
@@ -100,6 +120,8 @@ export function statsView(root) {
       ${tile('Ø R pro Trade', s.avgR == null ? '–' : fmtR(s.avgR), `${s.n} Trades`, tone(s.avgR))}
       ${tile('Regeln eingehalten', fmtPct(s.rulesPct), `${s.rules} von ${s.n}`)}
       ${tile('Profit-Faktor', s.pf == null ? '–' : s.pf === Infinity ? '∞' : fmtNum(s.pf, 2), 'Gewinne ÷ Verluste')}
+      ${tile('Längste Serie', `${sk.win} W`, `${sk.loss} Losses in Folge`)}
+      ${tile('Ø Gewinn / Verlust', avgWin == null ? '–' : `${fmtNum(avgWin, 1)} : ${fmtNum(avgLoss, 1)}`, 'in R, Win zu Loss')}
       ${tile('Max. Drawdown', ddR ? fmtR(-ddR) : '–', ddE ? fmtEur(-ddE) : 'vom Hoch', ddR ? 'down' : '')}
     </section>
 
@@ -124,6 +146,28 @@ export function statsView(root) {
       <p class="hint">Zeigt, ob du besser fährst, wenn du den Regeln folgst oder deinem Gefühl.</p>`
       : '<p class="hint">Bewerte bei deinen Trades „Macht der Trade Sinn?“, dann erscheint hier der Vergleich.</p>'}
     </section>
+
+    <div class="sec-title"><h2>Setup-Finder</h2></div>
+    <p class="hint top">Deine besten Kombinationen aus HTF-Bestätigung und Einstieg, ab 3 Trades.</p>
+    <section class="card flush">${combos.length ? `<div class="combos">${combos
+      .slice(0, 6)
+      .map((c, i) => `<div class="combo ${i === 0 && c.s.avgR > 0 ? 'top' : ''}">
+        <span class="combo-rank">${i + 1}</span>
+        <div class="combo-main"><b>${esc(c.conf)} <i>+</i> ${esc(c.model)}</b><small>${c.s.n} Trades · ${fmtPct(c.s.wr)} Treffer</small></div>
+        <span class="num combo-r ${tone(c.s.avgR)}">${fmtR(c.s.avgR)}</span>
+      </div>`)
+      .join('')}</div>` : '<p class="hint pad">Noch zu wenige Trades je Kombination.</p>'}</section>
+
+    <div class="sec-title"><h2>R-Verteilung</h2></div>
+    <section class="card">
+      <div class="dist">${dist.map((d) => `<div class="dist-col"><span class="dist-n num">${d.n || ''}</span><div class="dist-bar"><i class="${d.l === 'BE' ? 'flat' : d.neg ? 'down' : 'up'}" style="--h:${((d.n / distMax) * 100).toFixed(0)}%"></i></div><span class="dist-l">${d.l}</span></div>`).join('')}</div>
+    </section>
+
+    ${mkRows.length ? `<div class="sec-title"><h2>Was dich Fehler kosten</h2></div>
+    <section class="card flush">
+      ${mkCost.map((m) => `<div class="mk-row"><span>${esc(m.label)}</span><span class="muted">${m.list.length}× · ${fmtPct(summarize(m.list).wr)}</span><b class="num ${tone(m.sum)}">${fmtR(m.sum)}</b></div>`).join('')}
+      <div class="mk-row clean"><span>Ohne Fehler</span><span class="muted">${clean.length}× · ${fmtPct(summarize(clean).wr)}</span><b class="num ${tone(summarize(clean).avgR)}">Ø ${summarize(clean).avgR == null ? '–' : fmtR(summarize(clean).avgR)}</b></div>
+    </section>` : ''}
 
     ${rated.length ? `<div class="sec-title"><h2>Nach „Macht Sinn“</h2></div>
     <section class="card flush">${table([5, 4, 3, 2, 1].map((n) => ({ label: `${n} / 5`, list: rated.filter((t) => t.sense === n) })).filter((r) => r.list.length))}</section>` : ''}

@@ -47,6 +47,7 @@ export async function formView(root, id) {
   const urls = [];
 
   const symbols = recentSymbols();
+  const lastSetup = [...state.trades].filter((x) => x.accountId === state.settings.active).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
 
   root.innerHTML = `<header class="topbar sub">
       <button class="tb-text" data-cancel>Abbrechen</button>
@@ -65,6 +66,8 @@ export async function formView(root, id) {
         </div>
         <label class="field"><span>Datum</span><input type="date" data-date value="${t.date}"></label>
       </section>
+
+      ${!existing && lastSetup ? `<button type="button" class="copy-last" data-copy-last>${icon('copy')}<span>Setup vom letzten Trade übernehmen<small>${esc(lastSetup.symbol)} · ${lastSetup.date.split('-').reverse().slice(0, 2).join('.')}.</small></span></button>` : ''}
 
       <div class="sec-title"><h2>Bias</h2><span data-sec-state="bias"></span></div>
       <section class="card checks" data-sec="bias">${BIAS.map((g) => groupHtml(g, t.checks)).join('')}</section>
@@ -146,6 +149,16 @@ export async function formView(root, id) {
       else list.push(m.dataset.v);
       refreshChecks();
     }
+  });
+
+  root.querySelector('[data-copy-last]')?.addEventListener('click', (e) => {
+    t.checks = { ...emptyChecks(), ...structuredClone(lastSetup.checks) };
+    if (!t.symbol) sym.value = t.symbol = lastSetup.symbol;
+    t.side = lastSetup.side;
+    root.querySelectorAll('[data-side] button').forEach((x) => (x.className = x.dataset.v === t.side ? `on ${t.side === 'long' ? 'up' : 'down'}` : ''));
+    refreshChecks();
+    e.currentTarget.remove();
+    toast('Setup übernommen');
   });
 
   // Sinn

@@ -2,6 +2,13 @@
 import { emptyChecks, isoDate, uid } from './model.js';
 
 const SYMBOLS = ['EURUSD', 'GBPUSD', 'XAUUSD', 'NAS100', 'USDJPY'];
+const LESSONS = [
+  'Erst den Shift abwarten, dann rein.',
+  'Kein Trade ohne HTF-Bias.',
+  'Stop bleibt, wo er ist.',
+  'Nach einem Verlust eine Nacht drüber schlafen.',
+  'Weekly-Liquidität ist der bessere Magnet.',
+];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const some = (opts, p = 0.45) => {
   const out = opts.filter(() => Math.random() < p);
@@ -29,9 +36,15 @@ export function demoTrades(risk = 100) {
     const edge = (clean ? 0.52 : 0.3) + (c.sweep ? 0.06 : 0) + (sense >= 4 ? 0.04 : 0);
     const win = Math.random() < edge;
     const be = !win && Math.random() < 0.12;
-    const r = be ? 0 : win ? 1.2 + Math.random() * 2 : -(0.8 + Math.random() * 0.2);
+    const r = be ? 0 : win ? 1.2 + Math.random() * 2 : -(0.8 + Math.random() * 0.2) - (Math.random() < 0.15 ? 0.4 : 0);
+    const mistakes = [];
+    if (!win && !be && Math.random() < (clean ? 0.3 : 0.65)) mistakes.push(pick(['fomo', 'early-in', 'sl-moved', 'revenge', 'plan']));
+    if (win && Math.random() < 0.2) mistakes.push('early-out');
+    const lesson = mistakes.length && Math.random() < 0.5 ? pick(LESSONS) : '';
     list.push({
       id: uid() + i,
+      mistakes,
+      lesson,
       createdAt: d.getTime(),
       closedAt: d.getTime() + 3600e3,
       date: isoDate(d),
@@ -56,3 +69,8 @@ export function demoTrades(risk = 100) {
   }
   return list;
 }
+
+export const DEMO_REVIEWS = [
+  { good: 'Geduldig auf den Shift gewartet, keine Trades gegen den HTF-Bias.', improve: 'Freitags nicht mehr nachlegen.', focus: 'Nur A+ Setups: Sweep, Shift, Rejection.', focusRate: 'part' },
+  { good: 'Zwei saubere Trades auf Weekly-Liquidität.', improve: 'SL nicht mehr nachziehen, bevor 1R erreicht ist.', focus: 'Stop bleibt, wo er ist.', focusRate: null },
+];

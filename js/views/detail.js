@@ -1,6 +1,7 @@
 // Trade-Detail: Ergebnis, Regeln, Checkliste, Screenshots, Notiz
-import { getTrade, getImage, saveTrade, deleteTrade } from '../store.js';
-import { BIAS, ENTRY, SENSE_LABELS, groupOk, missing, rOf, rulesAuto, rulesOk, outcome, OUTCOME_LABEL } from '../model.js';
+import { getTrade, getImage, saveTrade, deleteTrade, delImage } from '../store.js';
+import { BIAS, ENTRY, SENSE_LABELS, groupOk, missing, rOf, rulesAuto, rulesOk, outcome, OUTCOME_LABEL, MISTAKE_LABEL } from '../model.js';
+import { tradeCard, shareCanvas } from '../share.js';
 import { esc, icon, fmtEur, fmtR, fmtDate, sideTag, tone, viewImage, confirmSheet, toast, topbar } from '../ui.js';
 import { go } from '../main.js';
 import { openClose } from './close.js';
@@ -53,7 +54,7 @@ export async function detailView(root, id) {
       <button class="btn ghost sm" data-flip>${ok ? 'Auf Nein' : 'Auf Ja'}</button>
     </section>`;
 
-  root.innerHTML = `${topbar({ title: t.symbol, back: '#/trades', right: `<a class="tb-text" href="#/edit/${t.id}">Bearbeiten</a>` })}
+  root.innerHTML = `${topbar({ title: t.symbol, back: '#/trades', right: `<button class="tb-btn" data-share aria-label="Teilen">${icon('share')}</button><a class="tb-text" href="#/edit/${t.id}">Bearbeiten</a>` })}
     <main class="page">
       <div class="detail-head">${sideTag(t.side)}<span class="muted">${fmtDate(t.date, true)}</span></div>
       ${result}
@@ -67,6 +68,11 @@ export async function detailView(root, id) {
         <div class="sense ro">${[1, 2, 3, 4, 5].map((n) => `<span class="${t.sense === n ? 'on' : t.sense > n ? 'part' : ''}">${n}</span>`).join('')}</div>
         <div class="sense-label">${t.sense ? SENSE_LABELS[t.sense] : 'Nicht bewertet'}</div>
       </section>
+      ${closed && (t.mistakes?.length || t.lesson) ? `<div class="sec-title"><h2>Nach dem Trade</h2></div>
+      <section class="card after">
+        ${t.mistakes?.length ? `<div class="chips">${t.mistakes.map((k) => `<span class="chip sm mk on">${esc(MISTAKE_LABEL[k] || k)}</span>`).join('')}</div>` : '<span class="muted small">Keine Fehler markiert</span>'}
+        ${t.lesson ? `<p class="lesson-quote">„${esc(t.lesson)}“</p>` : ''}
+      </section>` : ''}
       ${t.shots?.length ? '<div class="sec-title"><h2>Screenshots</h2></div><section class="card"><div class="shots" data-shots></div></section>' : ''}
       ${t.note ? `<div class="sec-title"><h2>Notiz</h2></div><section class="card note">${esc(t.note)}</section>` : ''}
       <button class="btn danger-ghost block" data-del>${icon('trash')} Trade löschen</button>
@@ -81,10 +87,22 @@ export async function detailView(root, id) {
     detailView(root, id);
   };
 
+  root.querySelector('[data-share]').onclick = () => shareCanvas(tradeCard(t), `vanta-${t.symbol}-${t.date}`);
+
   root.querySelector('[data-del]').onclick = async () => {
-    if (!(await confirmSheet({ title: 'Trade löschen?', text: `${t.symbol} vom ${fmtDate(t.date, true)} wird endgültig gelöscht.`, ok: 'Löschen', danger: true }))) return;
-    await deleteTrade(t.id);
-    toast('Gelöscht');
+    if (!(await confirmSheet({ title: 'Trade löschen?', text: `${t.symbol} vom ${fmtDate(t.date, true)} wird gelöscht.`, ok: 'Löschen', danger: true }))) return;
+    const gone = await deleteTrade(t.id, { keepImages: true });
+    let undone = false;
+    toast('Trade gelöscht', {
+      action: 'Rückgängig',
+      onAction: async () => {
+        undone = true;
+        await saveTrade(gone);
+        toast('Wiederhergestellt');
+        go(`trade/${gone.id}`);
+      },
+      onDone: () => !undone && (gone.shots || []).forEach((s) => delImage(s)),
+    });
     go('trades', true);
   };
 

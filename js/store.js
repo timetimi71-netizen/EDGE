@@ -4,6 +4,7 @@ import { uid } from './model.js';
 
 export const state = {
   trades: [],
+  reviews: {}, // Wochenrückblicke: { [accountId]: { [weekKey]: {...} } }
   settings: { name: '', accounts: [], active: null },
 };
 
@@ -38,8 +39,9 @@ export async function migrate() {
 }
 
 export async function load() {
-  const [trades, meta] = await Promise.all([db.all('trades'), db.get('meta', 'settings')]);
+  const [trades, meta, reviews] = await Promise.all([db.all('trades'), db.get('meta', 'settings'), db.get('meta', 'reviews')]);
   state.trades = trades;
+  state.reviews = reviews?.v || {};
   if (meta) state.settings = { ...state.settings, ...meta.v };
   await migrate();
 }
@@ -57,11 +59,26 @@ export async function saveTrade(t) {
   persist();
 }
 
-export async function deleteTrade(id) {
+// keepImages: Screenshots bleiben liegen, damit „Rückgängig“ funktioniert
+export async function deleteTrade(id, { keepImages = false } = {}) {
   const t = state.trades.find((x) => x.id === id);
   state.trades = state.trades.filter((x) => x.id !== id);
   await db.del('trades', id);
-  for (const s of t?.shots || []) await db.del('images', s);
+  if (!keepImages) for (const s of t?.shots || []) await db.del('images', s);
+  return t;
+}
+
+export const getReview = (key, acc = state.settings.active) => state.reviews[acc]?.[key] || null;
+
+export async function saveReview(key, data, acc = state.settings.active) {
+  state.reviews[acc] ||= {};
+  state.reviews[acc][key] = { ...data, updatedAt: Date.now() };
+  await db.put('meta', { k: 'reviews', v: state.reviews });
+}
+
+export async function setReviews(v) {
+  state.reviews = v || {};
+  await db.put('meta', { k: 'reviews', v: state.reviews });
 }
 
 export async function saveSettings(patch) {
@@ -86,6 +103,10 @@ export async function deleteAccount(id) {
   const list = state.settings.accounts.filter((a) => a.id !== id);
   if (!list.length) return;
   for (const t of accTrades(id)) await deleteTrade(t.id);
+  if (state.reviews[id]) {
+    delete state.reviews[id];
+    await db.put('meta', { k: 'reviews', v: state.reviews });
+  }
   await saveSettings({ accounts: list, active: state.settings.active === id ? list[0].id : state.settings.active });
 }
 
