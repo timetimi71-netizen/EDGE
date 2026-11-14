@@ -26,10 +26,10 @@ export function demoTrades(risk = 100) {
     c.rejection = Math.random() < 0.8;
     const clean = c.htfDir && c.structure.length && c.confirm.length && c.liq.length && c.shift && c.model.length && c.rejection;
     const sense = Math.min(5, Math.max(1, Math.round((clean ? 3.6 : 2.6) + (Math.random() - 0.5) * 3)));
-    let edge = (clean ? 0.58 : 0.36) + (c.sweep ? 0.06 : 0) + (sense >= 4 ? 0.04 : 0);
+    const edge = (clean ? 0.52 : 0.3) + (c.sweep ? 0.06 : 0) + (sense >= 4 ? 0.04 : 0);
     const win = Math.random() < edge;
     const be = !win && Math.random() < 0.12;
-    const r = be ? 0 : win ? 1.5 + Math.random() * 2.5 : -(0.7 + Math.random() * 0.3);
+    const r = be ? 0 : win ? 1.2 + Math.random() * 2 : -(0.8 + Math.random() * 0.2);
     list.push({
       id: uid() + i,
       createdAt: d.getTime(),

@@ -1,7 +1,7 @@
 // Kalender: Tages-Ergebnis pro Monat
-import { state } from '../store.js';
+import { accTrades, activeAccount } from '../store.js';
 import { summarize, isoDate } from '../model.js';
-import { fmtR, fmtEur, fmtPct, tone, topbar, icon, sheet, MONTHS, fmtDate } from '../ui.js';
+import { esc, fmtR, fmtEur, fmtPct, tone, topbar, icon, sheet, MONTHS, fmtDate } from '../ui.js';
 import { closedRow } from './list.js';
 
 const ui = { y: null, m: null, unit: 'R' };
@@ -18,7 +18,7 @@ export function calendarView(root) {
   const now = new Date();
   if (ui.y == null) [ui.y, ui.m] = [now.getFullYear(), now.getMonth()];
   const key = `${ui.y}-${String(ui.m + 1).padStart(2, '0')}`;
-  const closed = state.trades.filter((t) => t.status === 'closed' && t.date.startsWith(key));
+  const closed = accTrades().filter((t) => t.status === 'closed' && t.date.startsWith(key));
   const byDay = new Map();
   for (const t of closed) {
     if (!byDay.has(t.date)) byDay.set(t.date, []);
@@ -43,7 +43,7 @@ export function calendarView(root) {
     </button>`;
   }
 
-  root.innerHTML = `${topbar({ title: 'Kalender' })}
+  root.innerHTML = `${topbar({ title: 'Kalender', sub: esc(activeAccount().name) })}
     <main class="page">
       <div class="cal-nav">
         <button class="tb-btn" data-prev aria-label="Vorheriger Monat">${icon('back')}</button>

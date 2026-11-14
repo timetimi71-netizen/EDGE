@@ -1,5 +1,5 @@
 // Vanta · Service Worker: hält die App offline bereit.
-const VERSION = 'vanta-1.0.0';
+const VERSION = 'vanta-1.1.0';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,9 @@ const ASSETS = [
   './js/ui.js',
   './js/chart.js',
   './js/demo.js',
+  './js/insights.js',
+  './js/accounts.js',
+  './js/views/home.js',
   './js/views/list.js',
   './js/views/form.js',
   './js/views/detail.js',
