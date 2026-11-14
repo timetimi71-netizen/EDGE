@@ -1,8 +1,9 @@
 // Trades: offene oben, darunter abgeschlossene nach Monat
-import { state } from '../store.js';
+import { activeAccount, accTrades } from '../store.js';
 import { rOf, rulesOk, missing, summarize, outcome, OUTCOME_LABEL } from '../model.js';
 import { esc, fmtEur, fmtR, fmtDate, fmtPct, icon, sideTag, ruleMark, tone, topbar, MONTHS } from '../ui.js';
 import { openClose } from './close.js';
+import { editAccount } from '../accounts.js';
 
 const byDateDesc = (a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0);
 
@@ -22,7 +23,7 @@ export function closedRow(t) {
   </a>`;
 }
 
-function openCard(t) {
+export function openCard(t) {
   const miss = missing(t.checks);
   return `<div class="open-card">
     <a class="open-main" href="#/trade/${t.id}">
@@ -37,7 +38,8 @@ function openCard(t) {
 }
 
 export function listView(root) {
-  const trades = [...state.trades].sort(byDateDesc);
+  const trades = [...accTrades()].sort(byDateDesc);
+  const acc = activeAccount();
   const open = trades.filter((t) => t.status === 'open');
   const closed = trades.filter((t) => t.status === 'closed');
 
@@ -48,10 +50,10 @@ export function listView(root) {
     months.get(k).push(t);
   }
 
-  const banner = !(state.settings.account > 0)
-    ? `<a class="banner" href="#/settings">
-        <div><b>Kontogröße eintragen</b><span>Damit Vanta dein Ergebnis in R ausrechnet (1 % Risiko).</span></div>${icon('chevron')}
-      </a>`
+  const banner = !(acc.size > 0)
+    ? `<button class="banner" data-acc-edit>
+        <div><b>Startkapital eintragen</b><span>Damit Vanta dein Ergebnis in R ausrechnet.</span></div>${icon('chevron')}
+      </button>`
     : '';
 
   const empty = !trades.length
@@ -87,10 +89,15 @@ export function listView(root) {
     })
     .join('');
 
-  root.innerHTML = `${topbar({ title: 'Trades', right: `<a class="tb-btn" href="#/new" aria-label="Neuer Trade">${icon('plus')}</a>` })}
+  root.innerHTML = `${topbar({ title: 'Trades', sub: esc(acc.name), right: `<a class="tb-btn" href="#/new" aria-label="Neuer Trade">${icon('plus')}</a>` })}
     <main class="page">${banner}${empty}${openHtml}${monthsHtml}</main>`;
 
+  bindOpenCards(root, () => listView(root));
+  root.querySelector('[data-acc-edit]')?.addEventListener('click', () => editAccount(acc.id, () => listView(root)));
+}
+
+export function bindOpenCards(root, done) {
   root.querySelectorAll('[data-close]').forEach((b) => {
-    b.onclick = () => openClose(b.dataset.close, () => listView(root));
+    b.onclick = () => openClose(b.dataset.close, done);
   });
 }

@@ -1,7 +1,7 @@
 // Statistik: Kennzahlen, Equity, Regeln, Sinn, einzelne Haken, Symbol, Richtung, Wochentag
-import { state } from '../store.js';
-import { summarize, rOf, rulesOk, FEATURES, parseDate, isoDate } from '../model.js';
-import { esc, fmtR, fmtEur, fmtPct, tone, topbar } from '../ui.js';
+import { accTrades, activeAccount } from '../store.js';
+import { summarize, rOf, rulesOk, FEATURES, parseDate, isoDate, maxDrawdown } from '../model.js';
+import { esc, fmtR, fmtEur, fmtPct, fmtNum, tone, topbar } from '../ui.js';
 import { equityChart } from '../chart.js';
 
 const ui = { period: 'all', unit: 'R' };
@@ -49,12 +49,12 @@ function matrixCell(list, title) {
 
 export function statsView(root) {
   const from = since(ui.period);
-  const list = state.trades
+  const list = accTrades()
     .filter((t) => t.status === 'closed' && (!from || t.date >= from))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.closedAt || 0) - (b.closedAt || 0));
   const s = summarize(list);
 
-  const head = `${topbar({ title: 'Statistik' })}
+  const head = `${topbar({ title: 'Statistik', sub: esc(activeAccount().name) })}
     <main class="page">
     <div class="seg four period" data-period>${PERIODS.map(([k, l]) => `<button data-v="${k}" class="${ui.period === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 
@@ -63,6 +63,12 @@ export function statsView(root) {
     bind(root);
     return;
   }
+
+  // Drawdown in R und €
+  let cr = 0;
+  let ce = 0;
+  const ddR = s.nR ? maxDrawdown(list.map((t) => (cr += rOf(t) ?? 0))) : 0;
+  const ddE = maxDrawdown(list.map((t) => (ce += t.pnl || 0)));
 
   // Equity
   let acc = 0;
@@ -93,6 +99,8 @@ export function statsView(root) {
       ${tile('Trefferquote', fmtPct(s.wr), `${s.wins} W · ${s.losses} L · ${s.be} BE`)}
       ${tile('Ø R pro Trade', s.avgR == null ? '–' : fmtR(s.avgR), `${s.n} Trades`, tone(s.avgR))}
       ${tile('Regeln eingehalten', fmtPct(s.rulesPct), `${s.rules} von ${s.n}`)}
+      ${tile('Profit-Faktor', s.pf == null ? '–' : s.pf === Infinity ? '∞' : fmtNum(s.pf, 2), 'Gewinne ÷ Verluste')}
+      ${tile('Max. Drawdown', ddR ? fmtR(-ddR) : '–', ddE ? fmtEur(-ddE) : 'vom Hoch', ddR ? 'down' : '')}
     </section>
 
     <div class="sec-title"><h2>Equity</h2>

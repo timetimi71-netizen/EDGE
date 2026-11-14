@@ -1,5 +1,5 @@
 // Ergebnis eintragen: als Sheet zum Abschließen und als Teil des Formulars
-import { getTrade, saveTrade, defaultRisk, state } from '../store.js';
+import { getTrade, saveTrade, defaultRisk, activeAccount } from '../store.js';
 import { rulesAuto, missing, outcome, OUTCOME_LABEL } from '../model.js';
 import { esc, fmtR, fmtEur, parseNum, sheet, toast, sideTag, tone } from '../ui.js';
 
@@ -7,7 +7,7 @@ const fmtIn = (v) => (v == null ? '' : String(v).replace('.', ','));
 
 // draft: { sign: 1|-1, amount, risk, override: null|true|false }, t: Trade mit checks
 export function resultHtml(draft, t) {
-  const acc = state.settings.account;
+  const acc = activeAccount()?.size;
   return `<div class="result">
     <div class="seg two" data-sign>
       <button type="button" data-v="1" class="${draft.sign > 0 ? 'on up' : ''}">Gewinn</button>

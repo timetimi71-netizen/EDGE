@@ -76,7 +76,7 @@ export function outcome(t) {
 export const OUTCOME_LABEL = { win: 'Win', loss: 'Loss', be: 'BE' };
 
 export function summarize(list) {
-  const s = { n: list.length, wins: 0, losses: 0, be: 0, sumR: 0, nR: 0, sumEur: 0, rules: 0 };
+  const s = { n: list.length, wins: 0, losses: 0, be: 0, sumR: 0, nR: 0, sumEur: 0, rules: 0, gross: 0, grossLoss: 0 };
   for (const t of list) {
     const o = outcome(t);
     if (o === 'win') s.wins++;
@@ -85,12 +85,49 @@ export function summarize(list) {
     const r = rOf(t);
     if (r != null) { s.sumR += r; s.nR++; }
     s.sumEur += t.pnl || 0;
+    if (t.pnl > 0) s.gross += t.pnl;
+    else s.grossLoss -= t.pnl || 0;
     if (rulesOk(t)) s.rules++;
   }
   s.wr = s.wins + s.losses ? s.wins / (s.wins + s.losses) : null;
   s.avgR = s.nR ? s.sumR / s.nR : null;
   s.rulesPct = s.n ? s.rules / s.n : null;
+  s.pf = s.grossLoss > 0 ? s.gross / s.grossLoss : s.gross > 0 ? Infinity : null;
   return s;
+}
+
+export const byClose = (a, b) => a.date.localeCompare(b.date) || (a.closedAt || 0) - (b.closedAt || 0);
+
+// Größter Rückgang vom Hoch, Werte als kumulierte Kurve
+export function maxDrawdown(curve) {
+  let peak = 0;
+  let dd = 0;
+  for (const v of curve) {
+    peak = Math.max(peak, v);
+    dd = Math.max(dd, peak - v);
+  }
+  return dd;
+}
+
+// Kontostand, Ziel und Puffer bis zum Max-Verlust
+export function accountState(acc, trades) {
+  const closed = trades.filter((t) => t.status === 'closed').sort(byClose);
+  const size = acc.size > 0 ? acc.size : 0;
+  let run = 0;
+  const curve = closed.map((t) => (run += t.pnl || 0));
+  const pnl = run;
+  const st = { size, pnl, bal: size + pnl, pct: size ? pnl / size : null, curve, closed, open: trades.filter((t) => t.status === 'open') };
+  if (size && acc.targetPct > 0) {
+    st.target = (size * acc.targetPct) / 100;
+    st.progress = pnl / st.target;
+  }
+  if (size && acc.maxLossPct > 0) {
+    st.maxLoss = (size * acc.maxLossPct) / 100;
+    st.floor = size - st.maxLoss;
+    st.buffer = st.bal - st.floor;
+  }
+  st.status = st.buffer != null && st.buffer <= 0 ? 'breach' : st.target && pnl >= st.target ? 'passed' : 'live';
+  return st;
 }
 
 // Lokales Datum als YYYY-MM-DD

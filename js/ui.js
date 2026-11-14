@@ -26,6 +26,16 @@ export function fmtR(v, sign = true) {
   return `${s}${n2.format(Math.abs(v))} R`;
 }
 
+export function fmtMoney(v) {
+  if (v == null || Number.isNaN(v)) return '–';
+  return `${v < 0 ? '−' : ''}${n2.format(Math.abs(v))} €`;
+}
+
+export function fmtSignedPct(v, d = 2) {
+  if (v == null || Number.isNaN(v)) return '–';
+  return `${v > 0 ? '+' : v < 0 ? '−' : ''}${nf(d).format(Math.abs(v) * 100)} %`;
+}
+
 export const fmtPct = (v) => (v == null ? '–' : `${n0.format(v * 100)} %`);
 export const fmtNum = (v, d = 1) => (v == null ? '–' : (d === 1 ? n1 : nf(d)).format(v));
 
@@ -62,6 +72,8 @@ const P = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>',
+  spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
+  home: '<path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>',
   up: '<path d="M7 17L17 7M9 7h8v8"/>',
   down: '<path d="M7 7l10 10M17 9v8H9"/>',
 };
@@ -152,10 +164,10 @@ export async function compressImage(file, max = 1800, quality = 0.82) {
   }
 }
 
-export function topbar({ title, back, right = '' }) {
+export function topbar({ title, back, right = '', sub = '' }) {
   return `<header class="topbar ${back ? 'sub' : ''}">
     ${back ? `<a class="tb-btn" href="${back}" aria-label="Zurück">${icon('back')}</a>` : ''}
-    <h1>${esc(title)}</h1>
+    <h1>${esc(title)}${sub ? `<small>${sub}</small>` : ''}</h1>
     <div class="tb-right">${right}</div>
   </header>`;
 }
