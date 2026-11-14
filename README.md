@@ -14,10 +14,28 @@ Der Startbildschirm zeigt das aktive Konto als schwarze Karte: Kontostand, Ergeb
 - **Regel-Serie**: wie viele Trades in Folge nach Regeln, mit Rekord und den letzten 12 Trades als Balken
 - **Erkenntnisse**: Vanta vergleicht deine Trades und sagt dir, was R bringt und was R kostet: Regeln, Bauchgefühl, stärkster und schwächster Haken, Symbole, Wochentage, Long/Short
 - **Zuletzt** abgeschlossene Trades
+- **Woche abschließen** (ab Freitag bzw. für die Vorwoche) und dein **Fokus der Woche**
+- **Backup-Erinnerung**, wenn länger als 14 Tage nicht gesichert wurde
+
+## Wochenrückblick
+
+Ergebnis der Woche mit Tagesbalken und Vergleich zur Vorwoche, bester und schwächster Trade, Fehler und Lektionen der Woche. Dazu der Check, ob du deinen Fokus der letzten Woche umgesetzt hast, drei Fragen zur Reflexion und ein neuer Fokus, der dann auf Home steht. Alle Wochen unter *Rückblicke* (Tipp auf den Fokus).
+
+## Nach dem Trade: Fehler und Lektion
+
+Beim Abschließen optional antippen, was schiefging (FOMO, zu früh rein, zu früh raus, SL verschoben, zu viel Risiko, Revenge, gegen den Plan) und eine Lektion in einem Satz notieren. Die Statistik zeigt, wie viel R dich jeder Fehler kostet.
+
+## Teilen
+
+Jeder Trade und jede Woche lässt sich als Bild (1080 × 1350) teilen oder in Fotos sichern.
 
 ## Konten
 
 Mehrere Konten (z. B. Challenge, Funded, Demo), umschalten per Tipp auf die Konto-Karte. Pro Konto: Name, Startkapital, Risiko pro Trade, optional Profitziel und Max. Verlust in %. Trades, Statistik und Kalender zeigen immer das aktive Konto.
+
+## Trades
+
+Suche nach Symbol, Notiz oder Lektion, Filter (Win, Loss, Regeln gebrochen, mit Fehler, mit Screenshot) samt Zusammenfassung der Treffer. Beim neuen Trade lässt sich das Setup vom letzten Trade übernehmen. Gelöschte Trades kommen mit *Rückgängig* zurück.
 
 ## Ablauf
 
@@ -41,7 +59,7 @@ Sind alle Pflichtpunkte erfüllt, steht der Trade automatisch auf **Regeln einge
 
 ## Statistik
 
-Ergebnis in R und €, Trefferquote, Ø R, Anteil eingehaltener Regeln, Profit-Faktor, Max. Drawdown, Equity-Kurve, Regeln eingehalten vs. gebrochen, Regeln × Sinn, Auswertung nach Sinn 1 bis 5, jeder Haken mit/ohne, Long/Short, Symbole, Wochentage. Filter: Woche, Monat, Jahr, Alles. Dazu ein Kalender mit dem Tagesergebnis.
+Ergebnis in R und €, Trefferquote, Ø R, Anteil eingehaltener Regeln, Profit-Faktor, Max. Drawdown, längste Serien, Ø Gewinn zu Verlust in R, **Setup-Finder** (beste Kombination aus HTF-Bestätigung und Einstieg), R-Verteilung, Kosten der Fehler, Equity-Kurve, Regeln eingehalten vs. gebrochen, Regeln × Sinn, Auswertung nach Sinn 1 bis 5, jeder Haken mit/ohne, Long/Short, Symbole, Wochentage. Filter: Woche, Monat, Jahr, Alles. Dazu ein Kalender mit dem Tagesergebnis.
 
 ## Installieren
 

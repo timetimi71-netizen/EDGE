@@ -1,5 +1,8 @@
 // Home: Konto, Woche, offene Trades, Disziplin, Erkenntnis, letzte Trades
-import { state, activeAccount, accTrades } from '../store.js';
+import { state, activeAccount, accTrades, getReview } from '../store.js';
+import { weekKey } from '../model.js';
+import { weekLabel, shiftWeek, weekTrades } from './review.js';
+import { exportBackup } from '../backup.js';
 import { accountState, summarize, rulesOk, isoDate, parseDate, byClose } from '../model.js';
 import { esc, icon, fmtEur, fmtMoney, fmtR, fmtPct, fmtSignedPct, tone, MONTHS } from '../ui.js';
 import { sparkline } from '../chart.js';
@@ -148,6 +151,47 @@ function firstSteps(acc, trades) {
   </section>`;
 }
 
+const isWeekend = (d = new Date()) => d.getDay() >= 5 || d.getDay() === 0;
+
+function reviewCta() {
+  const cur = weekKey();
+  const keys = isWeekend() ? [cur, shiftWeek(cur, -1)] : [shiftWeek(cur, -1)];
+  const key = keys.find((k) => weekTrades(k).length && !getReview(k));
+  if (!key) return '';
+  const list = weekTrades(key);
+  const s = summarize(list);
+  return `<a class="review-cta" href="#/review/${key}">
+    <span class="rc-ic">${icon('flag')}</span>
+    <div><b>Woche abschließen</b><small>${weekLabel(key)} · <span class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)}</span> · ${s.n} Trades</small></div>
+    ${icon('chevron')}
+  </a>`;
+}
+
+function focusCard() {
+  const cur = weekKey();
+  const next = getReview(cur)?.focus;
+  const now = getReview(shiftWeek(cur, -1))?.focus;
+  const showNext = next && (isWeekend() || !now);
+  const text = showNext ? next : now;
+  if (!text) return '';
+  return `<a class="focus-card" href="#/reviews">
+    <span class="fc-k">${icon('spark')} ${showNext ? 'Fokus ab Montag' : 'Fokus diese Woche'}</span>
+    <p>„${esc(text)}“</p>
+  </a>`;
+}
+
+function backupCard() {
+  const last = state.settings.lastBackup;
+  if (state.trades.length < 5) return '';
+  const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+  if (days != null && days < 14) return '';
+  return `<section class="card backup-card">
+    <span class="bk-ic">${icon('shield')}</span>
+    <div><b>Backup machen</b><small>${days == null ? 'Deine Trades sind noch nirgends gesichert.' : `Letztes Backup vor ${days} Tagen.`} Sie liegen nur auf diesem Handy.</small></div>
+    <button class="btn sm" data-backup>Sichern</button>
+  </section>`;
+}
+
 export function homeView(root) {
   const acc = activeAccount();
   const trades = accTrades();
@@ -189,6 +233,9 @@ export function homeView(root) {
 
       <section class="card week">${weekStrip(closed)}</section>
 
+      ${reviewCta()}
+      ${focusCard()}
+
       ${firstSteps(acc, trades)}
 
       ${open.length ? `<div class="sec-title"><h2>Offen</h2><span class="count">${open.length}</span></div><div class="open-list">${open.map(openCard).join('')}</div>` : ''}
@@ -198,6 +245,8 @@ export function homeView(root) {
       ${insightCard(ins)}
 
       ${recent.length ? `<div class="sec-title"><h2>Zuletzt</h2><a class="link-sm" href="#/trades">Alle</a></div><div class="rows">${recent.map(closedRow).join('')}</div>` : ''}
+
+      ${backupCard()}
 
       ${!open.length && trades.length ? `<a class="cta" href="#/new"><span>${icon('plus')}</span><div><b>Neuer Trade</b><small>Bias und Entry vorher abhaken</small></div>${icon('chevron')}</a>` : ''}
     </main>`;
@@ -216,6 +265,9 @@ export function homeView(root) {
   };
   bindInsight();
   bindOpenCards(root, () => homeView(root));
+  root.querySelector('[data-backup]')?.addEventListener('click', async () => {
+    if (await exportBackup().catch(() => false)) homeView(root);
+  });
 
   // Kontostand beim ersten Öffnen hochzählen
   const bal = root.querySelector('[data-count]');

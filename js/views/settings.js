@@ -1,72 +1,12 @@
 // Einstellungen: Konto, Backup, Daten
-import { state, saveSettings, saveTrade, wipe, putImage, migrate, accTrades, saveAccount, setActive, deleteAccount, newAccount } from '../store.js';
+import { state, saveSettings, saveTrade, wipe, accTrades, saveAccount, setActive, deleteAccount, newAccount } from '../store.js';
+import { exportBackup, importBackup } from '../backup.js';
 import { accountState } from '../model.js';
 import { editAccount } from '../accounts.js';
-import { db } from '../db.js';
 import { esc, icon, toast, confirmSheet, topbar, fmtEur } from '../ui.js';
-import { demoTrades } from '../demo.js';
-
-const blobToB64 = (b) =>
-  new Promise((res) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.readAsDataURL(b);
-  });
-
-async function exportBackup() {
-  const images = await db.all('images');
-  const data = {
-    app: 'vanta',
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    settings: state.settings,
-    trades: state.trades,
-    images: await Promise.all(images.map(async (i) => ({ id: i.id, data: await blobToB64(i.blob) }))),
-  };
-  const name = `vanta-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  const file = new File([JSON.stringify(data)], name, { type: 'application/json' });
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: 'Vanta Backup' });
-      return;
-    } catch (e) {
-      if (e.name === 'AbortError') return;
-    }
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(file);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-async function importBackup(file) {
-  let data;
-  try {
-    data = JSON.parse(await file.text());
-  } catch {
-    return toast('Datei ist kein Vanta-Backup');
-  }
-  if (data?.app !== 'vanta' || !Array.isArray(data.trades)) return toast('Datei ist kein Vanta-Backup');
-  const ok = await confirmSheet({
-    title: 'Backup laden?',
-    text: `${data.trades.length} Trades aus dem Backup ersetzen alle Trades auf diesem Gerät.`,
-    ok: 'Ersetzen',
-    danger: true,
-  });
-  if (!ok) return;
-  await wipe();
-  for (const i of data.images || []) {
-    const blob = await (await fetch(i.data)).blob();
-    await putImage(i.id, blob);
-  }
-  await db.putMany('trades', data.trades);
-  state.trades = data.trades;
-  state.settings = { name: '', accounts: [], active: null, ...(data.settings || {}) };
-  await migrate();
-  await saveSettings({});
-  toast('Backup geladen');
-}
+import { demoTrades, DEMO_REVIEWS } from '../demo.js';
+import { weekKey } from '../model.js';
+import { saveReview } from '../store.js';
 
 export function settingsView(root) {
   const { accounts, active, name } = state.settings;
@@ -112,7 +52,7 @@ export function settingsView(root) {
           : `<button class="list-btn" data-demo>${icon('stats')}<span>Demo-Konto anlegen<small>100k-Konto mit 48 erfundenen Trades zum Ausprobieren</small></span></button>`}
         <button class="list-btn danger" data-wipe>${icon('trash')}<span>Alle Trades löschen</span></button>
       </section>
-      <p class="hint center">Alles bleibt nur auf diesem Gerät. ${state.trades.length} Trades gespeichert.<br>Vanta 1.1</p>
+      <p class="hint center">Alles bleibt nur auf diesem Gerät. ${state.trades.length} Trades gespeichert.<br>Vanta 1.2</p>
     </main>`;
 
   const rerender = () => settingsView(root);
@@ -134,6 +74,11 @@ export function settingsView(root) {
     await saveAccount(acc);
     await setActive(acc.id);
     for (const t of demoTrades(250)) await saveTrade({ ...t, accountId: acc.id });
+    const wk = new Date();
+    wk.setDate(wk.getDate() - 14);
+    await saveReview(weekKey(wk), DEMO_REVIEWS[0], acc.id);
+    wk.setDate(wk.getDate() + 7);
+    await saveReview(weekKey(wk), DEMO_REVIEWS[1], acc.id);
     toast('Demo-Konto angelegt');
     location.hash = '#/home';
   });

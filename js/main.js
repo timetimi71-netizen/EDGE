@@ -8,6 +8,7 @@ import { detailView } from './views/detail.js';
 import { statsView } from './views/stats.js';
 import { calendarView } from './views/calendar.js';
 import { settingsView } from './views/settings.js';
+import { reviewView, reviewsView } from './views/review.js';
 
 const app = document.getElementById('app');
 const tabs = document.getElementById('tabs');
@@ -21,6 +22,8 @@ const ROUTES = {
   new: { view: formView, full: true },
   edit: { view: formView, full: true },
   trade: { view: detailView, tab: 'trades' },
+  review: { view: reviewView, full: true },
+  reviews: { view: reviewsView, tab: 'home' },
 };
 
 const TABS = [
@@ -49,6 +52,9 @@ export async function render() {
   const sameRoute = current === raw;
   current = raw;
 
+  // Offene Sheets und Bildansicht gehören zur alten Seite
+  document.querySelectorAll('.sheet-wrap').forEach((w) => w.close?.());
+  document.querySelectorAll('.lightbox').forEach((l) => l.remove());
   document.body.classList.toggle('full', !!route.full);
   tabs.innerHTML = route.full
     ? ''

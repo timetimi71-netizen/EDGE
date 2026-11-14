@@ -73,6 +73,11 @@ const P = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>',
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
+  share: '<path d="M12 3v12M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
   home: '<path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>',
   up: '<path d="M7 17L17 7M9 7h8v8"/>',
   down: '<path d="M7 7l10 10M17 9v8H9"/>',
@@ -87,23 +92,38 @@ export function ruleMark(ok) {
   return `<span class="rule ${ok ? 'ok' : 'bad'}" title="${ok ? 'Regeln eingehalten' : 'Regeln gebrochen'}">${icon(ok ? 'check' : 'x')}</span>`;
 }
 
-export function toast(msg) {
+let toastEl = null;
+export function toast(msg, { action, onAction, onDone, ms } = {}) {
+  toastEl?.dismiss();
   const el = document.createElement('div');
-  el.className = 'toast';
-  el.textContent = msg;
+  el.className = `toast ${action ? 'has-action' : ''}`;
+  el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action)}</button>` : ''}`;
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('in'));
-  setTimeout(() => {
+  let done = false;
+  const dismiss = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
     el.classList.remove('in');
     setTimeout(() => el.remove(), 300);
-  }, 1800);
+    onDone?.();
+    if (toastEl === el) toastEl = null;
+  };
+  el.dismiss = dismiss;
+  toastEl = el;
+  const timer = setTimeout(dismiss, ms ?? (action ? 5000 : 1800));
+  el.querySelector('button')?.addEventListener('click', () => {
+    onAction?.();
+    dismiss();
+  });
 }
 
 // Bottom-Sheet. Gibt eine Funktion zum Schließen zurück.
 export function sheet(html, { onClose } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'sheet-wrap';
-  wrap.innerHTML = `<div class="sheet-bg"></div><div class="sheet" role="dialog" aria-modal="true"><div class="sheet-grip"></div>${html}</div>`;
+  wrap.innerHTML = `<div class="sheet-bg"></div><div class="sheet" role="dialog" aria-modal="true"><div class="sheet-grip"></div><button class="sheet-x" aria-label="Schließen">${icon('x')}</button>${html}</div>`;
   document.body.append(wrap);
   document.body.classList.add('locked');
   requestAnimationFrame(() => wrap.classList.add('in'));
@@ -117,6 +137,30 @@ export function sheet(html, { onClose } = {}) {
     onClose?.();
   };
   wrap.querySelector('.sheet-bg').addEventListener('click', close);
+  wrap.querySelector('.sheet-x').addEventListener('click', close);
+  // Nach unten ziehen schließt
+  const sh = wrap.querySelector('.sheet');
+  let y0 = null;
+  let dy = 0;
+  sh.addEventListener('touchstart', (e) => {
+    y0 = sh.scrollTop <= 0 ? e.touches[0].clientY : null;
+    dy = 0;
+  }, { passive: true });
+  sh.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    if (dy > 0) {
+      sh.style.transition = 'none';
+      sh.style.transform = `translateY(${dy}px)`;
+    }
+  }, { passive: true });
+  sh.addEventListener('touchend', () => {
+    if (y0 == null) return;
+    sh.style.transition = '';
+    sh.style.transform = '';
+    if (dy > 90) close();
+    y0 = null;
+  });
   wrap.close = close;
   return wrap;
 }

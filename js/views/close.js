@@ -1,6 +1,6 @@
 // Ergebnis eintragen: als Sheet zum Abschließen und als Teil des Formulars
 import { getTrade, saveTrade, defaultRisk, activeAccount } from '../store.js';
-import { rulesAuto, missing, outcome, OUTCOME_LABEL } from '../model.js';
+import { rulesAuto, missing, outcome, OUTCOME_LABEL, MISTAKES } from '../model.js';
 import { esc, fmtR, fmtEur, parseNum, sheet, toast, sideTag, tone } from '../ui.js';
 
 const fmtIn = (v) => (v == null ? '' : String(v).replace('.', ','));
@@ -23,6 +23,11 @@ export function resultHtml(draft, t) {
     </div>
     <div class="calc" data-calc></div>
     <div class="rules-box" data-rules></div>
+    <div class="mistakes">
+      <div class="group-head"><span>Fehler gemacht?</span><span class="opt">optional</span></div>
+      <div class="chips">${MISTAKES.map(([k, l]) => `<button type="button" class="chip sm mk ${draft.mistakes.includes(k) ? 'on' : ''}" data-mistake="${k}">${l}</button>`).join('')}</div>
+      <input class="lesson" data-lesson value="${esc(draft.lesson)}" placeholder="Lektion in einem Satz …" autocomplete="off">
+    </div>
   </div>`;
 }
 
@@ -83,6 +88,17 @@ export function bindResult(root, draft, t) {
     if (v != null && v < 0) draft.sign = -1;
     update();
   };
+  root.querySelectorAll('[data-mistake]').forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.mistake;
+      const i = draft.mistakes.indexOf(k);
+      if (i >= 0) draft.mistakes.splice(i, 1);
+      else draft.mistakes.push(k);
+      b.classList.toggle('on', i < 0);
+    };
+  });
+  const lesson = root.querySelector('[data-lesson]');
+  lesson.oninput = () => (draft.lesson = lesson.value);
   const risk = root.querySelector('[data-risk]');
   risk.oninput = () => {
     draft.risk = parseNum(risk.value);
@@ -93,9 +109,9 @@ export function bindResult(root, draft, t) {
 
 export function draftFrom(t) {
   if (t.status === 'closed') {
-    return { sign: t.pnl < 0 ? -1 : 1, amount: Math.abs(t.pnl), risk: t.riskEur ?? defaultRisk(), override: t.rulesOverride ?? null };
+    return { sign: t.pnl < 0 ? -1 : 1, amount: Math.abs(t.pnl), risk: t.riskEur ?? defaultRisk(), override: t.rulesOverride ?? null, mistakes: [...(t.mistakes || [])], lesson: t.lesson || '' };
   }
-  return { sign: 1, amount: null, risk: t.riskEur ?? defaultRisk(), override: t.rulesOverride ?? null };
+  return { sign: 1, amount: null, risk: t.riskEur ?? defaultRisk(), override: t.rulesOverride ?? null, mistakes: [...(t.mistakes || [])], lesson: t.lesson || '' };
 }
 
 export function applyDraft(t, draft) {
@@ -103,6 +119,8 @@ export function applyDraft(t, draft) {
   t.pnl = draft.sign * draft.amount;
   t.riskEur = draft.risk > 0 ? draft.risk : null;
   t.rulesOverride = draft.override;
+  t.mistakes = draft.mistakes;
+  t.lesson = draft.lesson.trim();
   t.closedAt ??= Date.now();
 }
 

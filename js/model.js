@@ -142,3 +142,69 @@ export function parseDate(s) {
 }
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// Typische Fehler, nach dem Trade optional anzutippen
+export const MISTAKES = [
+  ['fomo', 'FOMO'],
+  ['early-in', 'Zu früh rein'],
+  ['early-out', 'Zu früh raus'],
+  ['sl-moved', 'SL verschoben'],
+  ['size', 'Zu viel Risiko'],
+  ['revenge', 'Revenge'],
+  ['plan', 'Gegen den Plan'],
+];
+export const MISTAKE_LABEL = Object.fromEntries(MISTAKES);
+
+// Montag der Woche als Schlüssel
+export function weekKey(d = new Date()) {
+  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+  return isoDate(m);
+}
+
+export function weekRange(key) {
+  const start = parseDate(key);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start, end, from: key, to: isoDate(end) };
+}
+
+// Längste Serien von Wins und Losses (BE unterbricht nicht)
+export function streaks(list) {
+  let w = 0;
+  let l = 0;
+  let bw = 0;
+  let bl = 0;
+  for (const t of [...list].sort(byClose)) {
+    const o = outcome(t);
+    if (o === 'win') { w++; l = 0; }
+    else if (o === 'loss') { l++; w = 0; }
+    bw = Math.max(bw, w);
+    bl = Math.max(bl, l);
+  }
+  return { win: bw, loss: bl };
+}
+
+// Kombinationen aus HTF-Bestätigung und Einstieg
+export function setupCombos(list, min = 3) {
+  const conf = GROUPS.find((g) => g.key === 'confirm');
+  const model = GROUPS.find((g) => g.key === 'model');
+  const map = new Map();
+  for (const t of list) {
+    for (const c of t.checks?.confirm || []) {
+      for (const m of t.checks?.model || []) {
+        const k = `${c}|${m}`;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(t);
+      }
+    }
+  }
+  const lab = (g, v) => g.options.find((o) => o[0] === v)?.[1] || v;
+  return [...map]
+    .map(([k, l]) => {
+      const [c, m] = k.split('|');
+      return { conf: `HTF ${lab(conf, c)}`, model: lab(model, m), s: summarize(l), list: l };
+    })
+    .filter((x) => x.s.n >= min && x.s.avgR != null)
+    .sort((a, b) => b.s.avgR - a.s.avgR);
+}

@@ -1,5 +1,5 @@
 // Erkenntnisse aus den eigenen Trades: Was bringt R, was kostet R?
-import { summarize, rulesOk, FEATURES, parseDate } from './model.js';
+import { summarize, rulesOk, FEATURES, parseDate, MISTAKES, rOf, setupCombos } from './model.js';
 import { fmtR, fmtPct, esc } from './ui.js';
 
 const MIN = 3; // Mindestanzahl Trades pro Vergleichsgruppe
@@ -105,6 +105,35 @@ export function insights(closed) {
       title: `${longBetter ? 'Longs' : 'Shorts'} liegen dir mehr`,
       text: `Long: ${line(ls.sa)}.<br>Short: ${line(ls.sb)}.`,
       score: Math.abs(ls.diff) * 0.6,
+    });
+  }
+
+  // Teuerster Fehler
+  const mk = MISTAKES.map(([k, l]) => {
+    const ts = closed.filter((t) => t.mistakes?.includes(k));
+    return { l, n: ts.length, sum: ts.reduce((a, t) => a + (rOf(t) ?? 0), 0) };
+  })
+    .filter((m) => m.n >= 2 && m.sum < 0)
+    .sort((a, b) => a.sum - b.sum)[0];
+  if (mk) {
+    out.push({
+      tone: 'bad',
+      kicker: 'Teuerster Fehler',
+      title: `${esc(mk.l)} hat dich ${fmtR(Math.abs(mk.sum), false)} gekostet`,
+      text: `${mk.n} Trades mit diesem Fehler. Das ist R, das du ohne neue Strategie zurückholen kannst.`,
+      score: Math.abs(mk.sum) / 3 + 0.4,
+    });
+  }
+
+  // Bestes Setup
+  const combo = setupCombos(closed)[0];
+  if (combo && combo.s.avgR > 0.3) {
+    out.push({
+      tone: 'good',
+      kicker: 'Dein A+ Setup',
+      title: `${esc(combo.conf)} + ${esc(combo.model)}`,
+      text: `${line(combo.s)}. Wenn das auftaucht, darfst du dir sicher sein.`,
+      score: combo.s.avgR * 0.8,
     });
   }
 
