@@ -1,16 +1,32 @@
-# Edge
+# Vanta
 
-Trading-Journal fürs iPhone, gebaut für Prop-Firm-Challenges: Trades festhalten (von Hand oder per Screenshot aus dem MT5-Verlauf), die Regeln der Challenge im Blick behalten und in der Analyse sehen, wo das Geld verloren geht.
+Trading-Journal fürs Handy. Schwarz-Weiß, schnell und nur mit dem Wichtigsten.
 
-Edge ist eine Web-App. Sie läuft offline und speichert alle Einträge nur auf dem Gerät, nichts davon landet in diesem Repository.
+Vanta ist eine Web-App. Sie läuft offline und speichert alle Trades nur auf dem Gerät, nichts davon landet in diesem Repository.
 
-## Vor dem Trade
+## Ablauf
 
-Der **Check** auf „Heute“ rechnet die Lotgröße und zeigt eine Ampel: Rot, wenn eine Grenze oder Regel verletzt ist (Tageslimit, Verluste in Folge, Pause nach einem Verlust, eigene Regeln), Gelb bei Warnzeichen (gegen den Marktplan, Stress, Symbole oder Uhrzeiten, die bisher schlecht liefen), Grün, wenn alles passt. Ist der Trade raus, merkt Edge ihn sich; das Ergebnis kommt später von Hand oder per MT5-Screenshot dazu.
+1. **Vor dem Trade** (`+`): Symbol, Long/Short, Datum, dann die Checkliste abhaken und „Macht der Trade Sinn?“ mit 1 bis 5 bewerten. Screenshot und Notiz sind optional. Der Trade ist jetzt **offen**.
+2. **Nach dem Trade** (*Abschließen*): Gewinn oder Verlust in € eintragen. Vanta rechnet das Ergebnis in R aus (Risiko = Kontogröße × Risiko %, pro Trade änderbar) und setzt Win, Loss oder BE (BE = innerhalb ±0,1 R).
 
-## MT5 automatisch
+## Checkliste und Regeln
 
-Wie bei FX Replay: Der GitHub-Workflow „MT5 Sync“ meldet sich etwa alle 30 Minuten (Sonntagabend bis Freitag) mit dem Investor-Passwort bei MT5 an, holt geschlossene Trades, offene Positionen und den Kontostand und legt sie verschlüsselt im Zweig `mt5-data` ab. Edge holt sie beim Öffnen ab und entschlüsselt sie auf dem Gerät. Einrichten in Edge unter Einstellungen → MT5 automatisch; dort steht, welche vier Secrets (`MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`, `SYNC_KEY`) in diesem Repository anzulegen sind. Optional `MT5_COMPANY`, falls MT5 die Firma unter dem Servernamen nicht findet.
+| Bereich | Punkt | Regel |
+|---|---|---|
+| Bias | HTF in meine Richtung | Pflicht |
+| Bias | HTF-Struktur: BOS / CHoCH | mind. 1 |
+| Bias | HTF-Bestätigung: Fibonacci / FVG / IFVG / Breaker | mind. 1 |
+| Entry | Liquidität: Daily / HTF / Weekly H/L | mind. 1 |
+| Entry | Sweep | optional |
+| Entry | Shift | Pflicht |
+| Entry | Einstieg über: OTE / Breaker / FVG | mind. 1 |
+| Entry | Rejection (z. B. Engulfing) | Pflicht |
+
+Sind alle Pflichtpunkte erfüllt, steht der Trade automatisch auf **Regeln eingehalten**. Das lässt sich pro Trade von Hand umstellen. „Macht der Trade Sinn?“ zählt bewusst nicht zu den Regeln, damit die Statistik zeigen kann, ob Regeln oder Gefühl besser liegen.
+
+## Statistik
+
+Ergebnis in R und €, Trefferquote, Ø R, Anteil eingehaltener Regeln, Equity-Kurve, Regeln eingehalten vs. gebrochen, Regeln × Sinn, Auswertung nach Sinn 1 bis 5, jeder Haken mit/ohne, Long/Short, Symbole, Wochentage. Filter: Woche, Monat, Jahr, Alles. Dazu ein Kalender mit dem Tagesergebnis.
 
 ## Installieren
 
@@ -18,10 +34,10 @@ Wie bei FX Replay: Der GitHub-Workflow „MT5 Sync“ meldet sich etwa alle 30 M
 2. Auf **Teilen** tippen.
 3. **„Zum Home-Bildschirm“** wählen und **Hinzufügen** tippen.
 
-## Screenshots aus MT5
-
-Das Auslesen läuft über die kostenlose Gemini-API von Google. Den Schlüssel gibt es unter [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Er bleibt nur auf dem iPhone, auch nicht im Backup.
-
 ## Backup
 
-Einstellungen → Daten → **Backup erstellen** sichert alles als Datei, am besten in iCloud Drive.
+Mehr → **Backup erstellen** sichert alle Trades samt Screenshots als Datei, am besten in iCloud Drive. Mit **Backup laden** kommt alles zurück.
+
+## Technik
+
+Reines HTML, CSS und JavaScript (ES-Module), ohne Build-Schritt. Daten liegen in IndexedDB (`vanta`), ein Service Worker hält die App offline bereit. Zum lokalen Testen: `python3 -m http.server` im Repo-Ordner.
