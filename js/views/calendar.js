@@ -1,141 +1,91 @@
-// Edge · Kalender: Gewinn und Verlust pro Handelstag, Wochensummen, Tagesdetails
-import { S, activeAccount, tradesOn } from '../store.js';
-import { fmtMoney, tone, accountState, kpis } from '../edge.js';
-import { tradeRow } from './trades.js';
-import { icon } from '../ui.js';
-import { $, today, fromISO, addDays, addMonths, firstOfMonth, MONTHS, WD_LONG, fmtNum, fmtDayMonth, relDay, haptic } from '../util.js';
-import { act } from '../app.js';
+// Kalender: Tages-Ergebnis pro Monat
+import { state } from '../store.js';
+import { summarize, isoDate } from '../model.js';
+import { fmtR, fmtEur, fmtPct, tone, topbar, icon, sheet, MONTHS, fmtDate } from '../ui.js';
+import { closedRow } from './list.js';
 
-let month = firstOfMonth(today());
-let sel = today();
+const ui = { y: null, m: null, unit: 'R' };
 
-export function enter(opts = {}) {
-  if (opts.date) {
-    sel = opts.date;
-    month = firstOfMonth(opts.date);
-  }
-}
-
-// Kompakte Beträge für die Kästchen: 320, 1,2k
-function short(v) {
+const short = (v, unit) => {
+  if (v == null) return '';
   const a = Math.abs(v);
-  const s = a >= 10000 ? `${fmtNum(a / 1000, 0)}k` : a >= 1000 ? `${fmtNum(a / 1000, 1)}k` : fmtNum(a, 0);
-  return `${v < 0 ? '−' : '+'}${s}`;
-}
+  const s = v > 0 ? '+' : v < 0 ? '−' : '';
+  if (unit === 'R') return `${s}${a.toFixed(1).replace('.', ',')}R`;
+  return `${s}${a >= 1000 ? `${(a / 1000).toFixed(1).replace('.', ',')}k` : Math.round(a)}€`;
+};
 
-export function render() {
-  const acc = activeAccount();
-  return `
-  <header class="vhead cal-head">
-    <div class="vhead-text"><div class="eyebrow">Kalender</div><h1 class="vtitle" id="cal-title">${titleHTML()}</h1></div>
-    <div class="head-actions">
-      <button type="button" class="icon-btn" data-act="cal-shift" data-d="-1" aria-label="Voriger Monat">${icon('chevL')}</button>
-      <button type="button" class="icon-btn" data-act="cal-shift" data-d="1" aria-label="Nächster Monat">${icon('chevR')}</button>
-    </div>
-  </header>
-  ${acc ? `<section class="card cal-card" id="cal-card">${gridHTML(acc)}</section><div id="day-panel" class="day-panel">${dayPanel(acc)}</div>` : '<p class="empty">Lege zuerst dein Konto an.</p>'}`;
-}
-
-function titleHTML() {
-  const d = fromISO(month);
-  return `${MONTHS[d.getMonth()]} <em>${d.getFullYear()}</em>`;
-}
-
-function gridHTML(acc) {
-  const t = today();
-  const first = fromISO(month);
+export function calendarView(root) {
+  const now = new Date();
+  if (ui.y == null) [ui.y, ui.m] = [now.getFullYear(), now.getMonth()];
+  const key = `${ui.y}-${String(ui.m + 1).padStart(2, '0')}`;
+  const closed = state.trades.filter((t) => t.status === 'closed' && t.date.startsWith(key));
+  const byDay = new Map();
+  for (const t of closed) {
+    if (!byDay.has(t.date)) byDay.set(t.date, []);
+    byDay.get(t.date).push(t);
+  }
+  const ms = summarize(closed);
+  const first = new Date(ui.y, ui.m, 1);
   const offset = (first.getDay() + 6) % 7;
-  const start = addDays(month, -offset);
-  const dim = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-  const weeks = Math.ceil((offset + dim) / 7);
-  const st = accountState(acc);
-  const lim = st.dailyLimit;
-  // Farbstärke relativ zum größten Tag im Monat (oder zum Tageslimit)
-  let maxAbs = 1;
-  for (let i = 0; i < weeks * 7; i++) {
-    const v = Math.abs(dayNet(acc, addDays(start, i)) || 0);
-    if (v > maxAbs) maxAbs = v;
-  }
-  if (lim) maxAbs = Math.max(maxAbs, lim * 0.5);
-  let html = `<div class="pcal-wd">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((w) => `<span>${w}</span>`).join('')}<span>Woche</span></div><div class="pcal">`;
-  let monthNet = 0;
-  let monthDays = 0;
-  let green = 0;
-  for (let w = 0; w < weeks; w++) {
-    let wk = 0;
-    let wkHas = false;
-    for (let i = 0; i < 7; i++) {
-      const d = addDays(start, w * 7 + i);
-      const other = d.slice(0, 7) !== month.slice(0, 7);
-      const v = dayNet(acc, d);
-      const n = tradesOn(d, acc.id).length;
-      if (v != null) {
-        wk += v;
-        wkHas = true;
-        if (!other) {
-          monthNet += v;
-          monthDays++;
-          if (v > 0) green++;
-        }
-      }
-      const a = v == null ? 0 : Math.min(1, Math.abs(v) / maxAbs);
-      const breach = lim && v != null && v <= -lim;
-      html += `<button type="button" class="pd ${other ? 'other' : ''} ${d === t ? 'today' : ''} ${d === sel ? 'sel' : ''} ${v != null ? tone(v) : ''} ${breach ? 'breach' : ''}" style="--a:${(0.12 + a * 0.5).toFixed(2)}" data-act="cal-day" data-date="${d}" aria-label="${fmtDayMonth(d)}${v != null ? `, ${fmtMoney(v, acc.currency, { sign: true })}` : ''}">
-        <span class="pd-n">${fromISO(d).getDate()}</span>${v != null ? `<span class="pd-v">${short(v)}</span><span class="pd-c">${n}</span>` : ''}</button>`;
-    }
-    html += `<div class="pw ${wkHas ? tone(wk) : ''}">${wkHas ? short(wk) : ''}</div>`;
-  }
-  html += '</div>';
-  html += `<div class="cal-sum"><span>${MONTHS[fromISO(month).getMonth()]}</span><b class="${tone(monthNet)}">${fmtMoney(monthNet, acc.currency, { sign: true })}</b><span>${monthDays ? `${green} von ${monthDays} Tagen im Plus` : 'noch keine Trades'}</span></div>`;
-  return html;
-}
-function dayNet(acc, d) {
-  const ts = tradesOn(d, acc.id);
-  return ts.length ? ts.reduce((s, t) => s + t.pnl, 0) : null;
-}
+  const daysIn = new Date(ui.y, ui.m + 1, 0).getDate();
+  const today = isoDate();
 
-function dayPanel(acc) {
-  const ts = tradesOn(sel, acc.id).slice().reverse();
-  const day = S.days.get(sel);
-  const k = kpis(ts);
-  const rel = relDay(sel);
-  const d = fromISO(sel);
-  const title = `${rel || WD_LONG[d.getDay()]}, <em>${fmtDayMonth(sel)}</em>`;
-  const hasPlan = day && (day.plan || day.levels || day.news || Object.values(day.bias || {}).some(Boolean) || S.pics.has(`plan:${sel}`));
-  const hasReview = day && (day.mood || day.follow || day.good || day.better);
-  const notes = [hasPlan ? 'Marktplan' : null, hasReview ? 'Rückblick' : null].filter(Boolean);
-  return `<div class="dp-head"><h2 class="dp-title">${title}</h2><div class="dp-actions">${
-    sel !== today() || month !== firstOfMonth(today()) ? '<button type="button" class="today-pill" data-act="cal-today">Heute</button>' : ''
-  }</div></div>
-  ${
-    ts.length
-      ? `<section class="card"><div class="tday-h"><span>${k.n} ${k.n === 1 ? 'Trade' : 'Trades'} · ${fmtNum((k.winRate || 0) * 100, 0)}&nbsp;% Treffer</span><b class="${tone(k.net)}">${fmtMoney(k.net, acc.currency, { sign: true })}</b></div>${ts.map((t) => tradeRow(t)).join('')}</section>`
-      : '<p class="empty">An diesem Tag kein Trade.</p>'
+  let cells = '';
+  for (let i = 0; i < offset; i++) cells += '<span class="cal-cell blank"></span>';
+  for (let d = 1; d <= daysIn; d++) {
+    const iso = `${key}-${String(d).padStart(2, '0')}`;
+    const list = byDay.get(iso);
+    const s = list ? summarize(list) : null;
+    const v = s ? (ui.unit === 'R' && s.nR ? s.sumR : s.sumEur) : null;
+    const u = s && ui.unit === 'R' && s.nR ? 'R' : 'EUR';
+    cells += `<button class="cal-cell ${s ? `has ${tone(v) || 'flat'}` : ''} ${iso === today ? 'today' : ''}" ${s ? `data-day="${iso}"` : 'disabled'}>
+      <span class="cal-d">${d}</span>${s ? `<span class="cal-v num">${short(v, u)}</span><span class="cal-n">${list.length}</span>` : ''}
+    </button>`;
   }
-  <button type="button" class="card tip" data-act="go" data-to="journal" data-date="${sel}"><div class="tip-ic">${icon('journal')}</div><div><h3>${notes.length ? notes.join(' & ') : 'Tagebuch'}</h3><p>${notes.length ? 'Ansehen oder ergänzen' : 'Marktplan und Rückblick für diesen Tag'}</p></div><span class="x">${icon('chevR')}</span></button>`;
-}
 
-function paint() {
-  const acc = activeAccount();
-  if (!acc) return;
-  $('#cal-title').innerHTML = titleHTML();
-  $('#cal-card').innerHTML = gridHTML(acc);
-  $('#day-panel').innerHTML = dayPanel(acc);
+  root.innerHTML = `${topbar({ title: 'Kalender' })}
+    <main class="page">
+      <div class="cal-nav">
+        <button class="tb-btn" data-prev aria-label="Vorheriger Monat">${icon('back')}</button>
+        <h2>${MONTHS[ui.m]} ${ui.y}</h2>
+        <button class="tb-btn flip" data-next aria-label="Nächster Monat">${icon('back')}</button>
+      </div>
+      <section class="card cal-sum">
+        <div><span class="tile-label">Monat</span><span class="num big ${tone(ms.sumEur)}">${ms.nR ? fmtR(ms.sumR) : fmtEur(ms.sumEur)}</span></div>
+        <div><span class="tile-label">Trades</span><span class="num big">${ms.n}</span></div>
+        <div><span class="tile-label">Treffer</span><span class="num big">${fmtPct(ms.wr)}</span></div>
+        <div class="seg two mini" data-unit><button data-v="R" class="${ui.unit === 'R' ? 'on' : ''}">R</button><button data-v="EUR" class="${ui.unit === 'EUR' ? 'on' : ''}">€</button></div>
+      </section>
+      <section class="card cal">
+        <div class="cal-wd">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((w) => `<span>${w}</span>`).join('')}</div>
+        <div class="cal-grid">${cells}</div>
+      </section>
+    </main>`;
+
+  root.querySelector('[data-prev]').onclick = () => {
+    if (--ui.m < 0) [ui.m, ui.y] = [11, ui.y - 1];
+    calendarView(root);
+  };
+  root.querySelector('[data-next]').onclick = () => {
+    if (++ui.m > 11) [ui.m, ui.y] = [0, ui.y + 1];
+    calendarView(root);
+  };
+  root.querySelectorAll('[data-unit] button').forEach((b) => {
+    b.onclick = () => {
+      ui.unit = b.dataset.v;
+      calendarView(root);
+    };
+  });
+  root.querySelectorAll('[data-day]').forEach((b) => {
+    b.onclick = () => {
+      const list = byDay.get(b.dataset.day);
+      const s = summarize(list);
+      const w = sheet(`<div class="sheet-body">
+        <h3>${fmtDate(b.dataset.day, true)}</h3>
+        <p class="sheet-sub"><span class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : ''} ${fmtEur(s.sumEur)}</span></p>
+        <div class="rows">${list.map(closedRow).join('')}</div>
+      </div>`);
+      w.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => w.close()));
+    };
+  });
 }
-act('cal-shift', (el) => {
-  month = addMonths(month, Number(el.dataset.d));
-  haptic();
-  paint();
-});
-act('cal-day', (el) => {
-  sel = el.dataset.date;
-  if (sel.slice(0, 7) !== month.slice(0, 7)) month = firstOfMonth(sel);
-  haptic();
-  paint();
-});
-act('cal-today', () => {
-  sel = today();
-  month = firstOfMonth(sel);
-  haptic();
-  paint();
-});

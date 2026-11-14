@@ -1,52 +1,48 @@
-// Edge · Service Worker: hält die App offline bereit.
-const VERSION = 'edge-1.2.0';
+// Vanta · Service Worker: hält die App offline bereit.
+const VERSION = 'vanta-1.0.0';
 const ASSETS = [
   './',
   './index.html',
   './app.css',
   './manifest.webmanifest',
   './js/main.js',
-  './js/app.js',
-  './js/util.js',
+  './js/db.js',
   './js/store.js',
+  './js/model.js',
   './js/ui.js',
-  './js/charts.js',
-  './js/edge.js',
-  './js/gemini.js',
-  './js/img.js',
-  './js/file.js',
-  './js/speech.js',
+  './js/chart.js',
   './js/demo.js',
-  './js/settings.js',
-  './js/views/today.js',
-  './js/views/trades.js',
-  './js/views/calendar.js',
+  './js/views/list.js',
+  './js/views/form.js',
+  './js/views/detail.js',
+  './js/views/close.js',
   './js/views/stats.js',
-  './js/views/journal.js',
-  './js/views/check.js',
-  './js/views/mt5.js',
-  './js/sync.js',
+  './js/views/calendar.js',
+  './js/views/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))));
+  e.waitUntil(
+    caches
+      .open(VERSION)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
-      // Nur eigene alte Caches löschen: Luna und Edge liegen auf derselben Adresse
-      for (const k of await caches.keys()) if (k.startsWith('edge-') && k !== VERSION) await caches.delete(k);
+      // Eigene alte Caches und die der Vorgänger-App Edge löschen
+      for (const k of await caches.keys()) {
+        if ((k.startsWith('vanta-') || k.startsWith('edge-')) && k !== VERSION) await caches.delete(k);
+      }
       await self.clients.claim();
     })(),
   );
-});
-
-self.addEventListener('message', (e) => {
-  if (e.data === 'skip') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (e) => {
