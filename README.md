@@ -71,6 +71,10 @@ Ergebnis in R und €, Trefferquote, Ø R, Anteil eingehaltener Regeln, Profit-F
 
 Einstellungen (Zahnrad auf Home) → **Backup erstellen** sichert alle Trades samt Screenshots als Datei, am besten in iCloud Drive. Mit **Backup laden** kommt alles zurück.
 
+## Bewegung
+
+Start-Animation (das V zeichnet sich), Seitenübergänge je nach Richtung (Tabs gleiten seitlich, Details schieben sich rein, neuer Trade fährt von unten hoch), gleitender Tab-Indikator, Zahlen zählen hoch, Linien und Balken zeichnen sich, Konto-Karte mit Lichtreflex und 3D-Neigung unter dem Finger. In der Checkliste zeichnen sich die Haken; sind alle Regeln erfüllt, gibt es Konfetti. Nach dem Abschließen ein Vollbild-Moment mit dem Ergebnis, bei Regel-Serien (3, 5, 10 …) extra. Haptisches Feedback auf dem iPhone (ab iOS 18) und auf Android. Wer in den Systemeinstellungen „Bewegung reduzieren“ aktiviert hat, bekommt eine ruhige Version.
+
 ## Technik
 
 Reines HTML, CSS und JavaScript (ES-Module), ohne Build-Schritt. Daten liegen in IndexedDB (`vanta`), ein Service Worker hält die App offline bereit. Zum lokalen Testen: `python3 -m http.server` im Repo-Ordner.

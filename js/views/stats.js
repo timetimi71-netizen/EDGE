@@ -3,6 +3,7 @@ import { accTrades, activeAccount } from '../store.js';
 import { summarize, rOf, rulesOk, FEATURES, parseDate, isoDate, maxDrawdown, MISTAKES, setupCombos, streaks } from '../model.js';
 import { esc, fmtR, fmtEur, fmtPct, fmtNum, tone, topbar } from '../ui.js';
 import { equityChart } from '../chart.js';
+import { countUps, stagger, haptic } from '../fx.js';
 
 const ui = { period: 'all', unit: 'R' };
 
@@ -17,8 +18,8 @@ function since(period) {
   return isoDate(d);
 }
 
-function tile(label, value, sub = '', cls = '') {
-  return `<div class="tile"><span class="tile-label">${label}</span><span class="tile-value num ${cls}">${value}</span>${sub ? `<span class="tile-sub">${sub}</span>` : ''}</div>`;
+function tile(label, value, sub = '', cls = '', cu = '') {
+  return `<div class="tile"><span class="tile-label">${label}</span><span class="tile-value num ${cls}" ${cu}>${value}</span>${sub ? `<span class="tile-sub">${sub}</span>` : ''}</div>`;
 }
 
 // Tabelle: Gruppe | Trades | Treffer | Ø R | Σ R
@@ -115,10 +116,10 @@ export function statsView(root) {
 
   root.innerHTML = `${head}
     <section class="tiles">
-      ${tile('Ergebnis', s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur), s.nR ? fmtEur(s.sumEur) : '', tone(s.sumEur))}
-      ${tile('Trefferquote', fmtPct(s.wr), `${s.wins} W · ${s.losses} L · ${s.be} BE`)}
-      ${tile('Ø R pro Trade', s.avgR == null ? '–' : fmtR(s.avgR), `${s.n} Trades`, tone(s.avgR))}
-      ${tile('Regeln eingehalten', fmtPct(s.rulesPct), `${s.rules} von ${s.n}`)}
+      ${tile('Ergebnis', s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur), s.nR ? fmtEur(s.sumEur) : '', tone(s.sumEur), `data-cu="${s.nR ? s.sumR : s.sumEur}" data-cu-f="${s.nR ? 'R' : 'EUR'}"`)}
+      ${tile('Trefferquote', fmtPct(s.wr), `${s.wins} W · ${s.losses} L · ${s.be} BE`, '', s.wr == null ? '' : `data-cu="${s.wr}" data-cu-f="pct"`)}
+      ${tile('Ø R pro Trade', s.avgR == null ? '–' : fmtR(s.avgR), `${s.n} Trades`, tone(s.avgR), s.avgR == null ? '' : `data-cu="${s.avgR}" data-cu-f="R"`)}
+      ${tile('Regeln eingehalten', fmtPct(s.rulesPct), `${s.rules} von ${s.n}`, '', `data-cu="${s.rulesPct}" data-cu-f="pct"`)}
       ${tile('Profit-Faktor', s.pf == null ? '–' : s.pf === Infinity ? '∞' : fmtNum(s.pf, 2), 'Gewinne ÷ Verluste')}
       ${tile('Längste Serie', `${sk.win} W`, `${sk.loss} Losses in Folge`)}
       ${tile('Ø Gewinn / Verlust', avgWin == null ? '–' : `${fmtNum(avgWin, 1)} : ${fmtNum(avgLoss, 1)}`, 'in R, Win zu Loss')}
@@ -199,7 +200,10 @@ function bind(root) {
   root.querySelectorAll('[data-period] button').forEach((b) => {
     b.onclick = () => {
       ui.period = b.dataset.v;
+      haptic();
       statsView(root);
+      stagger(root);
+      countUps(root, { ms: 600 });
     };
   });
   root.querySelectorAll('[data-unit] button').forEach((b) => {

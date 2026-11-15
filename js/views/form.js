@@ -3,11 +3,12 @@ import { state, getTrade, saveTrade, putImage, getImage, delImage } from '../sto
 import { BIAS, ENTRY, SENSE_LABELS, emptyChecks, groupOk, missing, isoDate, uid } from '../model.js';
 import { esc, icon, toast, compressImage, viewImage, confirmSheet } from '../ui.js';
 import { go } from '../main.js';
+import { haptic, confetti } from '../fx.js';
 import { resultHtml, bindResult, draftFrom, applyDraft } from './close.js';
 
 function groupHtml(g, checks) {
   const ok = groupOk(g, checks);
-  const badge = g.required ? `<span class="req ${ok ? 'ok' : ''}">${ok ? icon('check') : 'Pflicht'}</span>` : '<span class="opt">optional</span>';
+  const badge = g.required ? `<span class="req ${ok ? 'ok' : ''}" data-badge="${g.key}">${ok ? icon('check') : 'Pflicht'}</span>` : '<span class="opt">optional</span>';
   if (g.type === 'toggle') {
     return `<button type="button" class="check-row ${checks[g.key] ? 'on' : ''}" data-toggle="${g.key}">
       <span class="box">${icon('check')}</span>
@@ -16,7 +17,7 @@ function groupHtml(g, checks) {
     </button>`;
   }
   return `<div class="group" data-group="${g.key}">
-    <div class="group-head"><span>${esc(g.label)}</span>${g.required ? `<span class="req ${ok ? 'ok' : ''}">${ok ? icon('check') : 'mind. 1'}</span>` : ''}</div>
+    <div class="group-head"><span>${esc(g.label)}</span>${g.required ? `<span class="req ${ok ? 'ok' : ''}" data-badge="${g.key}">${ok ? icon('check') : 'mind. 1'}</span>` : ''}</div>
     <div class="chips">${g.options
       .map(([v, l]) => `<button type="button" class="chip ${(checks[g.key] || []).includes(v) ? 'on' : ''}" data-multi="${g.key}" data-v="${v}">${esc(l)}</button>`)
       .join('')}</div>
@@ -114,6 +115,7 @@ export async function formView(root, id) {
   root.querySelectorAll('[data-side] button').forEach((b) => {
     b.onclick = () => {
       t.side = b.dataset.v;
+      haptic();
       root.querySelectorAll('[data-side] button').forEach((x) => (x.className = ''));
       b.className = `on ${t.side === 'long' ? 'up' : 'down'}`;
     };
@@ -121,21 +123,48 @@ export async function formView(root, id) {
   $('[data-date]').onchange = (e) => e.target.value && (t.date = e.target.value);
 
   // Checkliste
+  let prevAll = null;
+  const prevSec = {};
   const refreshChecks = () => {
+    const first = prevAll === null;
+    for (const g of [...BIAS, ...ENTRY]) {
+      const ok = groupOk(g, t.checks);
+      if (g.type === 'toggle') root.querySelector(`[data-toggle="${g.key}"]`)?.classList.toggle('on', !!t.checks[g.key]);
+      else root.querySelectorAll(`[data-multi="${g.key}"]`).forEach((b) => b.classList.toggle('on', t.checks[g.key].includes(b.dataset.v)));
+      const badge = root.querySelector(`[data-badge="${g.key}"]`);
+      if (badge && badge.classList.contains('ok') !== ok) {
+        badge.classList.toggle('ok', ok);
+        badge.innerHTML = ok ? icon('check') : g.type === 'toggle' ? 'Pflicht' : 'mind. 1';
+      }
+    }
     for (const [sec, list] of [['bias', BIAS], ['entry', ENTRY]]) {
-      const el = root.querySelector(`[data-sec="${sec}"]`);
-      el.innerHTML = list.map((g) => groupHtml(g, t.checks)).join('');
       const ok = list.every((g) => !g.required || groupOk(g, t.checks));
-      root.querySelector(`[data-sec-state="${sec}"]`).innerHTML = ok ? `<span class="sec-ok">${icon('check')} erfüllt</span>` : '';
+      if (prevSec[sec] !== ok) {
+        root.querySelector(`[data-sec-state="${sec}"]`).innerHTML = ok ? `<span class="sec-ok">${icon('check')} erfüllt</span>` : '';
+        root.querySelector(`[data-sec="${sec}"]`).classList.toggle('done', ok);
+        prevSec[sec] = ok;
+      }
     }
     const miss = missing(t.checks);
+    const all = !miss.length;
+    const bar = root.querySelector('.savebar');
     $('[data-status]').innerHTML = miss.length
       ? `<span class="st bad">${icon('x')} Fehlt: ${miss.map((g) => esc(g.label)).join(', ')}</span>`
       : `<span class="st ok">${icon('check')} Alle Regeln erfüllt</span>`;
+    bar.classList.toggle('all', all);
+    if (!first && all && !prevAll) {
+      bar.classList.remove('celebrate');
+      void bar.offsetWidth;
+      bar.classList.add('celebrate');
+      haptic(25);
+      confetti({ count: 60, y: 0.92, power: 0.85, spread: 0.8 });
+    }
+    prevAll = all;
     if (draft) bindResult(root.querySelector('[data-result]'), draft, t);
   };
   root.addEventListener('click', (e) => {
     const tg = e.target.closest('[data-toggle]');
+    if (tg || e.target.closest('[data-multi]')) haptic();
     if (tg) {
       t.checks[tg.dataset.toggle] = !t.checks[tg.dataset.toggle];
       refreshChecks();
@@ -166,6 +195,7 @@ export async function formView(root, id) {
     b.onclick = () => {
       const n = Number(b.dataset.v);
       t.sense = t.sense === n ? null : n;
+      haptic();
       root.querySelectorAll('[data-sense] button').forEach((x) => x.classList.toggle('on', Number(x.dataset.v) === t.sense));
       $('[data-sense-label]').textContent = t.sense ? SENSE_LABELS[t.sense] : 'Dein Gefühl, zählt nicht zu den Regeln';
     };
