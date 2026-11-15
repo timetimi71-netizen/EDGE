@@ -1,6 +1,7 @@
 // Ergebnis eintragen: als Sheet zum Abschließen und als Teil des Formulars
-import { getTrade, saveTrade, defaultRisk, activeAccount } from '../store.js';
-import { rulesAuto, missing, outcome, OUTCOME_LABEL, MISTAKES } from '../model.js';
+import { getTrade, saveTrade, defaultRisk, activeAccount, accTrades } from '../store.js';
+import { moment, haptic } from '../fx.js';
+import { rulesAuto, rulesOk, missing, outcome, OUTCOME_LABEL, MISTAKES, rOf, byClose } from '../model.js';
 import { esc, fmtR, fmtEur, parseNum, sheet, toast, sideTag, tone } from '../ui.js';
 
 const fmtIn = (v) => (v == null ? '' : String(v).replace('.', ','));
@@ -144,7 +145,35 @@ export function openClose(id, done) {
     applyDraft(t, draft);
     await saveTrade(t);
     w.close();
-    toast('Trade abgeschlossen');
+    await celebrate(t);
     done?.();
   };
+}
+
+// Vollbild-Moment nach dem Abschließen
+const MILESTONES = [3, 5, 10, 15, 20, 30, 50, 75, 100];
+export async function celebrate(t) {
+  const r = rOf(t);
+  const o = outcome(t);
+  const ok = rulesOk(t);
+  let streak = 0;
+  for (const x of accTrades().filter((x) => x.status === 'closed').sort(byClose).reverse()) {
+    if (!rulesOk(x)) break;
+    streak++;
+  }
+  const big = r != null ? fmtR(r) : fmtEur(t.pnl);
+  const milestone = ok && MILESTONES.includes(streak);
+  haptic(o === 'win' ? 30 : 12);
+  const lines = {
+    win: ok ? 'Win nach Regeln. Genau so.' : 'Win, aber außerhalb der Regeln. Glück zählt nicht.',
+    loss: ok ? 'Regeln eingehalten. So verliert ein Profi.' : 'Regeln gebrochen. Was nimmst du mit?',
+    be: ok ? 'Break-even nach Regeln. Kapital geschützt.' : 'Break-even. Nächstes Mal nach Regeln.',
+  };
+  await moment({
+    kicker: milestone ? `🔥 ${streak} Trades in Folge nach Regeln` : `${esc(t.symbol)} · ${OUTCOME_LABEL[o]}`,
+    title: `<span class="m-num ${o === 'win' ? 'up' : o === 'loss' ? 'down' : ''}">${big}</span>`,
+    text: lines[o],
+    tone: o === 'win' || milestone ? 'good' : o === 'loss' ? 'bad' : 'neutral',
+    ms: milestone ? 2600 : 1900,
+  });
 }

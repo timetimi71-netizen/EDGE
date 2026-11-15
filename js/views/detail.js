@@ -2,6 +2,7 @@
 import { getTrade, getImage, saveTrade, deleteTrade, delImage } from '../store.js';
 import { BIAS, ENTRY, SENSE_LABELS, groupOk, missing, rOf, rulesAuto, rulesOk, outcome, OUTCOME_LABEL, MISTAKE_LABEL } from '../model.js';
 import { tradeCard, shareCanvas } from '../share.js';
+import { haptic } from '../fx.js';
 import { esc, icon, fmtEur, fmtR, fmtDate, sideTag, tone, viewImage, confirmSheet, toast, topbar } from '../ui.js';
 import { go } from '../main.js';
 import { openClose } from './close.js';
@@ -33,7 +34,7 @@ export async function detailView(root, id) {
 
   const result = closed
     ? `<section class="card hero">
-        <div class="hero-main num ${tone(t.pnl)}">${r != null ? fmtR(r) : fmtEur(t.pnl)}</div>
+        <div class="hero-main num ${tone(t.pnl)}" data-cu="${r != null ? r : t.pnl}" data-cu-f="${r != null ? 'R' : 'EUR'}">${r != null ? fmtR(r) : fmtEur(t.pnl)}</div>
         <div class="hero-sub">
           ${r != null ? `<span class="num ${tone(t.pnl)}">${fmtEur(t.pnl)}</span><span class="muted">·</span>` : ''}
           <span class="pill">${OUTCOME_LABEL[outcome(t)]}</span>
@@ -81,6 +82,7 @@ export async function detailView(root, id) {
   root.querySelector('[data-close]')?.addEventListener('click', () => openClose(t.id, () => detailView(root, id)));
 
   root.querySelector('[data-flip]').onclick = async () => {
+    haptic();
     const next = !ok;
     t.rulesOverride = next === auto ? null : next;
     await saveTrade(t);

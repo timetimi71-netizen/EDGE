@@ -6,12 +6,13 @@ import { exportBackup } from '../backup.js';
 import { accountState, summarize, rulesOk, isoDate, parseDate, byClose } from '../model.js';
 import { esc, icon, fmtEur, fmtMoney, fmtR, fmtPct, fmtSignedPct, tone, MONTHS } from '../ui.js';
 import { sparkline } from '../chart.js';
+import { tilt, haptic } from '../fx.js';
 import { insights } from '../insights.js';
 import { openAccounts, editAccount } from '../accounts.js';
 import { closedRow, openCard, bindOpenCards } from './list.js';
 
 const WD_LONG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-const ui = { insight: 0, counted: false };
+const ui = { insight: 0 };
 
 function greeting(h) {
   if (h < 5) return 'Noch wach';
@@ -55,8 +56,8 @@ function accountCard(acc, st) {
 
   return `<button class="acc-card" data-acc>
     <div class="acc-top"><span class="acc-name">${esc(acc.name)}</span>${badge}<span class="acc-chev">${icon('chevron')}</span></div>
-    <div class="acc-bal num" data-count="${st.bal}">${fmtMoney(st.bal)}</div>
-    <div class="acc-delta num ${tone(st.pnl)}">${fmtEur(st.pnl)} <span>· ${fmtSignedPct(st.pct)}</span></div>
+    <div class="acc-bal num" data-cu="${st.bal}" data-cu-from="${st.size}" data-cu-f="money">${fmtMoney(st.bal)}</div>
+    <div class="acc-delta num ${tone(st.pnl)}"><span class="ad-v" data-cu="${st.pnl}" data-cu-f="EUR">${fmtEur(st.pnl)}</span> <span>· ${fmtSignedPct(st.pct)}</span></div>
     <div class="acc-spark">${sparkline(st.curve)}</div>
     ${bars.length ? `<div class="acc-bars">${bars.join('')}</div>` : ''}
   </button>`;
@@ -116,10 +117,10 @@ function discipline(closed) {
         : `Rekord: ${best} in Folge.`;
   return `<section class="card streak">
     <div class="streak-top">
-      <div class="streak-num num">${streak}</div>
+      <div class="streak-num num" data-cu="${streak}" data-cu-f="int">${streak}</div>
       <div class="streak-txt"><b>${streak === 1 ? 'Trade' : 'Trades'} in Folge nach Regeln</b><span>${msg}</span></div>
     </div>
-    <div class="streak-dots">${last.map((t) => `<a href="#/trade/${t.id}" class="sd ${rulesOk(t) ? 'ok' : 'bad'}" aria-label="${esc(t.symbol)}"></a>`).join('')}${Array.from({ length: Math.max(0, 12 - last.length) }, () => '<span class="sd none"></span>').join('')}</div>
+    <div class="streak-dots">${last.map((t, i) => `<a href="#/trade/${t.id}" class="sd ${rulesOk(t) ? 'ok' : 'bad'}" style="--d:${i}" aria-label="${esc(t.symbol)}"></a>`).join('')}${Array.from({ length: Math.max(0, 12 - last.length) }, () => '<span class="sd none"></span>').join('')}</div>
   </section>`;
 }
 
@@ -162,7 +163,7 @@ function reviewCta() {
   const s = summarize(list);
   return `<a class="review-cta" href="#/review/${key}">
     <span class="rc-ic">${icon('flag')}</span>
-    <div><b>Woche abschließen</b><small>${weekLabel(key)} · <span class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)}</span> · ${s.n} Trades</small></div>
+    <div><b>Woche abschließen</b><small>${weekLabel(key)} · <span class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)}</span> · ${s.n} ${s.n === 1 ? 'Trade' : 'Trades'}</small></div>
     ${icon('chevron')}
   </a>`;
 }
@@ -210,6 +211,7 @@ export function homeView(root) {
   const mo = summarize(closed.filter((t) => t.date >= monthFrom));
   const last20 = summarize([...closed].sort(byClose).slice(-20));
   const val = (s) => (s.n ? (s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)) : '–');
+  const cu = (s) => (s.n ? `data-cu="${s.nR ? s.sumR : s.sumEur}" data-cu-f="${s.nR ? 'R' : 'EUR'}"` : '');
 
   const open = st.open.sort((a, b) => b.date.localeCompare(a.date));
   const recent = [...closed].sort(byClose).reverse().slice(0, 4);
@@ -226,9 +228,9 @@ export function homeView(root) {
       ${accountCard(acc, st)}
 
       <section class="kpis">
-        <div class="kpi"><span class="kpi-l">Diese Woche</span><span class="kpi-v num ${tone(wk.sumEur)}">${val(wk)}</span><span class="kpi-s">${wk.n} ${wk.n === 1 ? 'Trade' : 'Trades'}</span></div>
-        <div class="kpi"><span class="kpi-l">${MONTHS[now.getMonth()]}</span><span class="kpi-v num ${tone(mo.sumEur)}">${val(mo)}</span><span class="kpi-s">${mo.n ? `${fmtPct(mo.wr)} Treffer` : '0 Trades'}</span></div>
-        <div class="kpi ring-kpi">${ring(last20.rulesPct)}<span class="ring-v num">${last20.n ? `${Math.round(last20.rulesPct * 100)}<small>%</small>` : '–'}</span><span class="kpi-s">Disziplin</span></div>
+        <div class="kpi"><span class="kpi-l">Diese Woche</span><span class="kpi-v num ${tone(wk.sumEur)}" ${cu(wk)}>${val(wk)}</span><span class="kpi-s">${wk.n} ${wk.n === 1 ? 'Trade' : 'Trades'}</span></div>
+        <div class="kpi"><span class="kpi-l">${MONTHS[now.getMonth()]}</span><span class="kpi-v num ${tone(mo.sumEur)}" ${cu(mo)}>${val(mo)}</span><span class="kpi-s">${mo.n ? `${fmtPct(mo.wr)} Treffer` : '0 Trades'}</span></div>
+        <div class="kpi ring-kpi">${ring(last20.rulesPct)}<span class="ring-v num">${last20.n ? `<span data-cu="${Math.round(last20.rulesPct * 100)}" data-cu-f="int">${Math.round(last20.rulesPct * 100)}</span><small>%</small>` : '–'}</span><span class="kpi-s">Disziplin</span></div>
       </section>
 
       <section class="card week">${weekStrip(closed)}</section>
@@ -260,6 +262,7 @@ export function homeView(root) {
       const el = root.querySelector('.insight');
       el.outerHTML = insightCard(ins);
       root.querySelector('.insight').classList.add('swap');
+      haptic();
       bindInsight();
     });
   };
@@ -269,19 +272,5 @@ export function homeView(root) {
     if (await exportBackup().catch(() => false)) homeView(root);
   });
 
-  // Kontostand beim ersten Öffnen hochzählen
-  const bal = root.querySelector('[data-count]');
-  if (bal && !ui.counted) {
-    ui.counted = true;
-    const to = Number(bal.dataset.count);
-    const from = acc.size || 0;
-    const t0 = performance.now();
-    const step = (t) => {
-      const k = Math.min(1, (t - t0) / 700);
-      const e = 1 - Math.pow(1 - k, 3);
-      bal.textContent = fmtMoney(from + (to - from) * e);
-      if (k < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
+  tilt(root.querySelector('.acc-card'));
 }

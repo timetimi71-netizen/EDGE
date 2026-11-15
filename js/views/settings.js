@@ -52,7 +52,7 @@ export function settingsView(root) {
           : `<button class="list-btn" data-demo>${icon('stats')}<span>Demo-Konto anlegen<small>100k-Konto mit 48 erfundenen Trades zum Ausprobieren</small></span></button>`}
         <button class="list-btn danger" data-wipe>${icon('trash')}<span>Alle Trades löschen</span></button>
       </section>
-      <p class="hint center">Alles bleibt nur auf diesem Gerät. ${state.trades.length} Trades gespeichert.<br>Vanta 1.2</p>
+      <p class="hint center">Alles bleibt nur auf diesem Gerät. ${state.trades.length} Trades gespeichert.<br>Vanta 1.3</p>
     </main>`;
 
   const rerender = () => settingsView(root);

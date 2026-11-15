@@ -5,6 +5,7 @@ import { esc, icon, fmtR, fmtEur, fmtPct, tone, toast, MONTHS, topbar } from '..
 import { closedRow } from './list.js';
 import { weekCard, shareCanvas, bestWorst } from '../share.js';
 import { go } from '../main.js';
+import { moment } from '../fx.js';
 
 export function weekLabel(key) {
   const { start, end } = weekRange(key);
@@ -65,7 +66,7 @@ export function reviewView(root, key) {
       </div>
 
       <section class="card rv-hero">
-        <div class="rv-main num ${tone(s.sumEur)}">${s.n ? (s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)) : '–'}</div>
+        <div class="rv-main num ${tone(s.sumEur)}" ${s.n ? `data-cu="${s.nR ? s.sumR : s.sumEur}" data-cu-f="${s.nR ? 'R' : 'EUR'}"` : ''}>${s.n ? (s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)) : '–'}</div>
         <div class="rv-sub">${s.n ? `${s.nR ? `${fmtEur(s.sumEur)} · ` : ''}${diff != null ? `<span class="${tone(diff)}">${diff >= 0 ? '▲' : '▼'} ${fmtR(Math.abs(diff), false)} zur Vorwoche</span>` : ''}` : 'Keine abgeschlossenen Trades in dieser Woche'}</div>
         <div class="rv-days">${days
           .map((v, i) => `<div class="rv-day"><div class="rv-bar-wrap">${v == null ? '' : `<i class="${v >= 0 ? 'up' : 'down'}" style="--h:${Math.max(6, (Math.abs(v) / maxAbs) * 100).toFixed(0)}%"></i>`}</div><span>${'MDMDFSS'[i]}</span></div>`)
@@ -112,7 +113,13 @@ export function reviewView(root, key) {
   root.querySelector('[data-share]')?.addEventListener('click', () => shareCanvas(weekCard(list, range, activeAccount().name), `vanta-woche-${key}`));
   root.querySelector('[data-save]').onclick = async () => {
     await saveReview(key, { good: draft.good.trim(), improve: draft.improve.trim(), focus: draft.focus.trim(), focusRate: draft.focusRate });
-    toast(draft.focus.trim() ? 'Gespeichert · Fokus steht auf Home' : 'Rückblick gespeichert');
+    await moment({
+      kicker: 'Woche abgeschlossen',
+      title: draft.focus.trim() ? `„${esc(draft.focus.trim())}“` : 'Stark.',
+      text: draft.focus.trim() ? 'Dein Fokus für nächste Woche steht jetzt auf Home.' : 'Rückblick gespeichert.',
+      tone: 'good',
+      ms: 2600,
+    });
     go('home', true);
   };
 }
@@ -130,7 +137,7 @@ export function reviewsView(root) {
           return `<a class="row" href="#/review/${k}">
             <div class="row-main"><div class="row-title"><b>${weekLabel(k)}</b>${r ? `<span class="rule ok">${icon('check')}</span>` : ''}</div>
             <div class="row-sub">${r?.focus ? `Fokus: ${esc(r.focus)}` : r ? 'Abgeschlossen' : 'Noch offen'}</div></div>
-            <div class="row-val"><div class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)}</div><div class="muted small">${s.n} Trades</div></div>
+            <div class="row-val"><div class="num ${tone(s.sumEur)}">${s.nR ? fmtR(s.sumR) : fmtEur(s.sumEur)}</div><div class="muted small">${s.n} ${s.n === 1 ? 'Trade' : 'Trades'}</div></div>
           </a>`;
         })
         .join('')}</div>` : '<div class="empty small"><h2>Noch keine Wochen</h2><p>Sobald du Trades abschließt, kannst du hier jede Woche zurückblicken.</p></div>'}
